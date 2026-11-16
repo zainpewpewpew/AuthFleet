@@ -2,6 +2,41 @@
 
 Deploy AuthFleet ke VPS Ubuntu/Debian berdampingan dengan Sociofy, lewat Nginx sebagai reverse proxy. Guide ini memakai contoh domain `authfleet.sociofy.com` — ganti dengan domain Anda (bisa subdomain Sociofy, atau domain gratis dari paket VPS).
 
+## Quick Install (1 command)
+
+Kalau VPS Ubuntu/Debian sudah ada Nginx (dari Sociofy) dan Anda cuma mau install AuthFleet, pakai `install.sh`:
+
+```bash
+# Di VPS, sebagai user dengan sudo:
+curl -fsSL https://raw.githubusercontent.com/zainpewpewpew/AuthFleet/main/deploy/install.sh -o install.sh
+sudo bash install.sh authfleet.sociofy.com
+```
+
+Script akan:
+- Buat user `authfleet` terpisah
+- Install Node.js 20 kalau belum ada
+- Clone repo + build
+- Generate `.env.server` dengan kunci fresh (print password login sekali)
+- Install systemd service + nginx server block
+- Setup backup cron harian
+- Tambahkan UFW rules kalau firewall aktif
+
+**Idempotent & aman:** Script bisa dijalankan ulang tanpa klobber config existing. Tidak menyentuh Sociofy. Port 3000 dicek kosong sebelum lanjut.
+
+Setelah script selesai, 2 langkah manual:
+
+```bash
+# Dapatkan SSL cert (interaktif, pilih "Redirect" saat ditanya)
+sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d authfleet.sociofy.com
+```
+
+Lalu buka `https://authfleet.sociofy.com`, login pakai password dari script, buat OAuth folder, sambung Gmail, generate API key untuk Sociofy Agent.
+
+Sisanya di bawah adalah guide manual step-by-step untuk yang mau kontrol penuh atau debug.
+
+---
+
 ## Target Arsitektur
 
 ```
