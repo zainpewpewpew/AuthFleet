@@ -6,6 +6,10 @@ dist/
 .env*
 !.env.example
 
+# Local secret scratch (operator password notes, etc.)
+pw.txt
+*.secret
+
 # DB + runtime data
 data/
 
