@@ -1,0 +1,28 @@
+[Unit]
+Description=AuthFleet - OTP dashboard for Sociofy
+Documentation=https://github.com/zainpewpewpew/AuthFleet
+After=network.target
+
+[Service]
+Type=simple
+User=authfleet
+Group=authfleet
+WorkingDirectory=/home/authfleet/AuthFleet
+EnvironmentFile=/home/authfleet/AuthFleet/.env.server
+ExecStart=/usr/bin/node /home/authfleet/AuthFleet/node_modules/.bin/next start -H 127.0.0.1
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/home/authfleet/AuthFleet/data /home/authfleet/AuthFleet/.next
+
+[Install]
+WantedBy=multi-user.target
