@@ -32,15 +32,16 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   // Google Cloud Console and every folder's OAuth client points at it.
   const redirectUri = absoluteUrl(req, '/api/oauth/callback').toString();
   const client = new google.auth.OAuth2(folder.client_id, secret, redirectUri);
-  // A re-auth passes ?email=<address>: hint Google to that account AND force
-  // consent so a fresh refresh_token is issued (otherwise reconnect returns
-  // no refresh_token and the 7-day clock on this device never resets).
+  // Always force consent + account picker: Google only issues a refresh
+  // token when it shows the consent dialog, so skipping consent on a
+  // "just pick an account" flow would silently fail here with no-refresh
+  // whenever the operator had previously consented with the same account.
   const hintEmail = new URL(req.url).searchParams.get('email');
   const authOptions: Parameters<typeof client.generateAuthUrl>[0] = {
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/gmail.readonly', 'openid', 'email'],
     state: id,
-    prompt: hintEmail ? 'consent' : 'select_account',
+    prompt: 'consent select_account',
   };
   if (hintEmail) authOptions.login_hint = hintEmail;
   const url = client.generateAuthUrl(authOptions);

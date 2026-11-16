@@ -36,12 +36,31 @@ function lifecycleLabel(connectedAt: number): string {
 
 export const dynamic = 'force-dynamic';
 
+type Notice = { tone: 'green' | 'pink' | 'amber' | 'neutral'; title: string; body?: string };
+
+function describeOauth(code: string | undefined, email?: string): Notice | null {
+  if (!code) return null;
+  switch (code) {
+    case 'ok': return { tone: 'green', title: email ? `${email} tersambung` : 'Gmail tersambung', body: 'Refresh token tersimpan. Siap dipakai Sociofy untuk ambil OTP.' };
+    case 'denied': return { tone: 'neutral', title: 'Consent dibatalkan', body: 'Kamu klik batal di layar Google. Gmail belum tersambung.' };
+    case 'no-code': return { tone: 'pink', title: 'Google tidak mengembalikan kode auth', body: 'Flow OAuth putus di tengah. Coba sambungkan lagi.' };
+    case 'no-state': return { tone: 'pink', title: 'State OAuth hilang', body: 'Session browser berubah. Mulai lagi dari dalam folder.' };
+    case 'no-client': return { tone: 'pink', title: 'OAuth Client ID belum di-set', body: 'Edit folder dulu — isi Client ID dari Google Cloud Console.' };
+    case 'no-secret': return { tone: 'pink', title: 'OAuth Client Secret belum di-set', body: 'Edit folder dulu — paste Client Secret dari Google Cloud Console.' };
+    case 'decrypt-fail': return { tone: 'pink', title: 'Gagal decrypt OAuth secret', body: 'AUTHFLEET_ENCRYPT_KEY mungkin berubah. Paste ulang Client Secret di folder ini.' };
+    case 'no-email': return { tone: 'pink', title: 'Google tidak mengembalikan email', body: 'Scope "email" mungkin tidak granted. Coba lagi dan terima semua scope.' };
+    case 'no-refresh': return { tone: 'amber', title: 'Google tidak mengembalikan refresh token', body: 'Buka myaccount.google.com → Keamanan → Aplikasi pihak ketiga, cabut akses AuthFleet, lalu sambung ulang.' };
+    case 'exchange-fail': return { tone: 'pink', title: 'Gagal tukar kode → token', body: 'Pastikan Client ID + Secret di folder ini cocok dengan yang di Google Cloud Console.' };
+    default: return { tone: 'neutral', title: `OAuth: ${code}` };
+  }
+}
+
 export default async function FolderDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ action?: string; newKey?: string }>;
+  searchParams: Promise<{ action?: string; newKey?: string; oauth?: string; email?: string; gmail?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -54,12 +73,32 @@ export default async function FolderDetailPage({
   const recent = listRecentOtp(100).filter((e) => e.folder_id === id).slice(0, 12);
   const freshKey = sp.newKey;
   const expiringSoon = gmails.filter((g) => g.effective === 'connected' && (g.life === 'warning' || g.life === 'critical')).length;
+  const oauthNotice = describeOauth(sp.oauth, sp.email);
+  const gmailNotice: Notice | null = sp.gmail === 'disconnected'
+    ? { tone: 'neutral', title: 'Gmail dilepas dari folder', body: 'Refresh token dihapus. Sambungkan ulang kapan saja.' }
+    : null;
+  const notice = oauthNotice ?? gmailNotice;
 
   return (
     <div className="af-folder" style={{ '--tone': folder.tone } as React.CSSProperties}>
       <Link href="/folders" className="af-folder__back">
         <ArrowLeft size={14} /> Semua folder
       </Link>
+
+      {notice ? (
+        <Panel
+          tone="chrome"
+          radius="sm"
+          className="af-folder__notice"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="af-folder__notice-row">
+            <Chip tone={notice.tone}>{notice.title}</Chip>
+          </div>
+          {notice.body ? <p className="af-body af-muted af-folder__notice-body">{notice.body}</p> : null}
+        </Panel>
+      ) : null}
 
       <header className="af-folder__head">
         <div className="af-folder__cover" aria-hidden>

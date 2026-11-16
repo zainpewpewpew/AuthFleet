@@ -13,6 +13,10 @@
 }
 .af-folder__back:hover { background: rgba(14, 55, 107, 0.08); color: var(--af-ink); }
 
+.af-folder__notice { display: grid; gap: 8px; padding: 14px 16px; }
+.af-folder__notice-row { display: flex; align-items: center; gap: 10px; }
+.af-folder__notice-body { margin: 0; max-width: 72ch; font-size: 13px; }
+
 .af-folder__head {
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr) auto;

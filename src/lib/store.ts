@@ -265,6 +265,9 @@ const SEED_FOLDERS: Array<{ label: string; tone: string; gmails: string[] }> = [
 ];
 
 function seedIfEmpty(d: DbHandle) {
+  // Demo data only in dev. Production stays empty until the operator
+  // creates their first real folder. Opt back in with AUTHFLEET_SEED=1.
+  if (process.env.NODE_ENV === 'production' && process.env.AUTHFLEET_SEED !== '1') return;
   const n = (d.prepare('SELECT COUNT(*) AS n FROM folders').get() as { n: number }).n;
   if (n > 0) return;
   const now = Date.now();
