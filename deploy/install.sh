@@ -59,7 +59,17 @@ else
   ok "User $AUTHFLEET_USER dibuat"
 fi
 
-# ─── Step 2: Node.js 20 + sqlite3 ──────────────────────
+# ─── Step 2: Build tools, Node.js 20+, sqlite3 ─────────
+# better-sqlite3 dan argon2 adalah native modules. Kalau VPS pakai Node yang
+# tidak punya prebuilt (misal Node 24), node-gyp akan compile dari source —
+# butuh make/gcc/g++/python3.
+if ! command -v make >/dev/null || ! command -v g++ >/dev/null; then
+  info "Install build tools (make, gcc, g++, python3) untuk compile native modules"
+  apt-get update -qq
+  apt-get install -y build-essential python3
+  ok "Build tools terpasang"
+fi
+
 if command -v node >/dev/null; then
   CURRENT_NODE=$(node -v | sed 's/v//;s/\..*//')
   if [[ "$CURRENT_NODE" -ge "$NODE_REQUIRED" ]]; then
