@@ -9,8 +9,9 @@ import { google } from 'googleapis';
 /**
  * Unified Google OAuth callback.
  *
- * Google Cloud Console only needs ONE redirect URI registered:
- *   http://localhost:3000/api/oauth/callback
+ * Google Cloud Console only needs ONE redirect URI registered, built from
+ * the public hostname (dev: http://localhost:3000/api/oauth/callback,
+ * prod: https://<your-host>/api/oauth/callback).
  *
  * The folder the operator was connecting a Gmail to arrives on the `state`
  * query parameter (signed by Google in the round-trip). This replaces the

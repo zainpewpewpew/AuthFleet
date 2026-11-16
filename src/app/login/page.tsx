@@ -37,7 +37,7 @@ export default function LoginPage() {
       }
       router.push('/dashboard');
     } catch (err) {
-      setError('Tidak bisa menghubungi server. Pastikan `npm run dev` jalan.');
+      setError('Tidak bisa menghubungi server. Pastikan service AuthFleet jalan.');
       setBusy(false);
     }
   }
@@ -81,7 +81,7 @@ export default function LoginPage() {
             </div>
           </dl>
           <p className="af-muted af-login__hint">
-            Kredensial kamu tinggal di laptop ini. Nggak ada telemetry, nggak ada signup publik.
+            Kredensial OAuth terenkripsi AES-256-GCM di server AuthFleet. Nggak ada telemetry, nggak ada signup publik.
           </p>
         </aside>
 
@@ -127,8 +127,8 @@ export default function LoginPage() {
 
             <footer className="af-login__footer">
               <span className="af-muted">
-                Belum punya password? Setel <code className="af-mono">AUTHFLEET_PASSWORD</code> di{' '}
-                <code className="af-mono">.env.local</code> lalu restart server.
+                Belum punya password? Setel <code className="af-mono">AUTHFLEET_PASSWORD</code> di file{' '}
+                <code className="af-mono">.env</code> server lalu restart service.
               </span>
               <Link href="https://github.com/zainpewpewpew/AuthFleet" className="af-login__link">
                 Dokumentasi ↗
@@ -139,7 +139,7 @@ export default function LoginPage() {
       </section>
 
       <footer className="af-login__system">
-        <span className="af-mono af-mono-sm">v0.1.0 · localhost · ID</span>
+        <span className="af-mono af-mono-sm">v0.1.0 · self-hosted · ID</span>
         <span className="af-mono af-mono-sm">build: y2k frutiger aero · code-led</span>
       </footer>
     </main>

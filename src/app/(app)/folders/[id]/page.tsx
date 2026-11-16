@@ -105,7 +105,7 @@ export default async function FolderDetailPage({
             <div>
               <h2 className="af-display af-h3">Gmail dalam folder</h2>
               <p className="af-body af-muted">
-                Setiap Gmail minta sekali consent Google. Refresh token disimpan terenkripsi di laptop ini.
+                Setiap Gmail minta sekali consent Google. Refresh token disimpan terenkripsi (AES-256-GCM) di server AuthFleet.
               </p>
             </div>
             <Link href={`/api/folders/${id}/oauth/start`}>
