@@ -1,0 +1,25 @@
+node_modules/
+.next/
+out/
+dist/
+
+.env*
+!.env.example
+
+# DB + runtime data
+data/
+
+# Impeccable runtime dirs (keep surface briefs + design.json + hook ignores)
+.impeccable/questions/
+.impeccable/mocks/
+.impeccable/review/
+.impeccable/critique/
+.impeccable/live/
+.impeccable/build/
+.impeccable/config.local.json
+
+.DS_Store
+*.log
+
+# TypeScript incremental cache
+tsconfig.tsbuildinfo

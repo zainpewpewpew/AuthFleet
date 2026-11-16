@@ -1,0 +1,154 @@
+/* ─── /login — Y2K Frutiger Aero welcome ──────────────── */
+.af-login {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: 32px clamp(24px, 4vw, 56px);
+  gap: 28px;
+  position: relative;
+  overflow: hidden;
+}
+
+.af-login__flare {
+  position: absolute;
+  top: -340px;
+  right: -260px;
+  width: 760px;
+  height: 760px;
+  pointer-events: none;
+  background:
+    radial-gradient(closest-side, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0) 65%),
+    radial-gradient(closest-side, rgba(126, 220, 243, 0.65), rgba(126, 220, 243, 0) 70%);
+  filter: blur(4px);
+  z-index: 0;
+}
+.af-login__orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(26px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.85;
+}
+.af-login__orb--a {
+  width: 340px;
+  height: 340px;
+  bottom: -120px;
+  left: -80px;
+  background: radial-gradient(closest-side, rgba(0, 201, 212, 0.4), rgba(0, 201, 212, 0) 70%);
+}
+.af-login__orb--b {
+  width: 260px;
+  height: 260px;
+  top: 32%;
+  left: 38%;
+  background: radial-gradient(closest-side, rgba(255, 79, 170, 0.22), rgba(255, 79, 170, 0) 70%);
+}
+
+.af-login__brand {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.af-login__stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 1fr);
+  gap: clamp(32px, 6vw, 96px);
+  align-items: center;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.af-login__intro { display: grid; gap: 20px; min-width: 0; }
+.af-login__intro h1 { margin: 6px 0 2px; }
+.af-login__intro h1 em {
+  font-style: italic;
+  color: var(--af-teal-ink);
+}
+.af-login__intro p { max-width: 54ch; margin: 0; }
+
+.af-login__facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 8px 0 0;
+  padding: 18px 20px;
+  border-radius: var(--af-r-md);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.2) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(0, 36, 81, 0.08),
+    0 0 0 1px rgba(14, 55, 107, 0.18);
+}
+.af-login__facts div { display: grid; gap: 6px; }
+.af-login__facts dt {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--af-ink-mute);
+  font-weight: 700;
+}
+.af-login__facts dd {
+  font-size: 28px;
+  color: var(--af-ink);
+  margin: 0;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.af-login__hint { font-size: 13px; }
+
+.af-login__card {
+  padding: clamp(28px, 3vw, 40px);
+  max-width: 460px;
+  justify-self: end;
+  width: 100%;
+}
+
+.af-login__form { display: grid; gap: 18px; }
+.af-login__form h2 { margin: 0; }
+.af-login__form p { margin: 0 0 6px; }
+
+/* .af-field* classes moved to globals.css */
+
+.af-login__footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+  padding-top: 4px;
+}
+.af-login__footer code { font-size: 12px; background: rgba(0, 36, 81, 0.06); padding: 1px 6px; border-radius: 6px; }
+.af-login__link {
+  color: var(--af-teal-ink);
+  font-weight: 700;
+}
+.af-login__link:hover { color: var(--af-ink); }
+
+.af-login__system {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  opacity: 0.7;
+}
+
+@media (max-width: 920px) {
+  .af-login__stage { grid-template-columns: 1fr; gap: 28px; }
+  .af-login__card { justify-self: stretch; max-width: none; }
+  .af-login__intro h1 { font-size: clamp(28px, 7vw, 40px); }
+}
+@media (max-width: 480px) {
+  .af-login { padding: 24px 16px; }
+  .af-login__facts { grid-template-columns: 1fr 1fr; }
+  .af-login__facts dd { font-size: 22px; }
+}

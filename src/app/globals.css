@@ -1,0 +1,448 @@
+/* ─── AuthFleet · Y2K Frutiger Aero · Design tokens ─────────────────────── */
+/*
+  World palette does real jobs:
+   - Sky aqua gradient = page ground (ambient atmosphere)
+   - Chrome panel        = all elevated surfaces (cards, nav, inputs)
+   - Ocean ink           = all text, line weight
+   - Active teal         = selection, focus ring, "connected" success
+   - Signal pink         = reserved state: NEW, destructive, needs-attention
+   - Bottle green        = success/connected confirm
+   - Amber               = degraded / warning (needs re-auth, quota, etc.)
+*/
+
+/*
+  Fonts are loaded via `next/font/google` in src/app/layout.tsx, which
+  downloads the woff2 files at build time and serves them from this app's
+  origin (no runtime fetch to fonts.gstatic.com). The CSS variables
+  --af-font-* below bind to those self-hosted families.
+*/
+
+:root {
+  color-scheme: light;
+
+  /* ── Palette ──────────────────────────────────────────── */
+  --af-sky-1: #A8D8FF;
+  --af-sky-2: #C8E6FF;
+  --af-sky-3: #EAF4FF;
+  --af-sky-4: #F6FAFE;
+
+  --af-ink: #002451;
+  --af-ink-dim: #37486B;
+  --af-ink-mute: #6B7B9A;
+
+  --af-chrome-1: #FDFEFF;
+  --af-chrome-2: #EBF2F9;
+  --af-chrome-3: #CFDBEA;
+  --af-chrome-edge: #8FA7C4;
+
+  --af-teal: #00C9D4;
+  --af-teal-ink: #006770;
+  --af-pink: #FF4FAA;
+  --af-pink-ink: #8E0E52;
+  --af-green: #00A676;
+  --af-green-ink: #00563D;
+  --af-amber: #FFB020;
+  --af-amber-ink: #7A4C00;
+
+  /* ── Sky atmosphere (page ground) ─────────────────────── */
+  --af-sky-field: radial-gradient(
+      1200px 800px at 15% -10%,
+      rgba(255, 255, 255, 0.95),
+      transparent 60%
+    ),
+    radial-gradient(
+      1000px 700px at 90% 0%,
+      rgba(206, 232, 255, 0.9),
+      transparent 55%
+    ),
+    linear-gradient(180deg, var(--af-sky-1) 0%, var(--af-sky-2) 36%, var(--af-sky-3) 68%, var(--af-sky-4) 100%);
+
+  /* ── Chrome panel (every elevated surface) ────────────── */
+  --af-chrome-face: linear-gradient(180deg,
+      var(--af-chrome-1) 0%,
+      var(--af-chrome-2) 48%,
+      #DCE6F3 100%);
+  --af-chrome-specular: linear-gradient(180deg,
+      rgba(255, 255, 255, 0.95) 0%,
+      rgba(255, 255, 255, 0.35) 42%,
+      rgba(255, 255, 255, 0) 60%);
+  --af-chrome-bevel-top: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --af-chrome-bevel-bottom: inset 0 -1px 0 rgba(0, 36, 81, 0.12);
+  --af-chrome-bevel-sides: inset 1px 0 0 rgba(255, 255, 255, 0.5),
+    inset -1px 0 0 rgba(0, 36, 81, 0.06);
+  --af-chrome-outline: 0 0 0 1px rgba(14, 55, 107, 0.14);
+
+  /* ── Depth (offset + blur, never a halo) ──────────────── */
+  --af-shadow-xs: 0 1px 2px rgba(10, 42, 92, 0.1),
+                  0 2px 6px rgba(10, 42, 92, 0.06);
+  --af-shadow-sm: 0 2px 4px rgba(10, 42, 92, 0.1),
+                  0 6px 14px rgba(10, 42, 92, 0.1);
+  --af-shadow-md: 0 4px 10px rgba(10, 42, 92, 0.12),
+                  0 14px 36px rgba(10, 42, 92, 0.14);
+  --af-shadow-lg: 0 8px 20px rgba(10, 42, 92, 0.14),
+                  0 28px 72px rgba(10, 42, 92, 0.2);
+
+  /* ── Type stacks (next/font sets var(--font-*) at build) ── */
+  --af-font-display: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  --af-font-body: var(--font-body), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --af-font-mono: var(--font-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ── Radii ────────────────────────────────────────────── */
+  --af-r-xs: 10px;
+  --af-r-sm: 14px;
+  --af-r-md: 20px;
+  --af-r-lg: 28px;
+  --af-r-xl: 36px;
+  --af-r-pill: 999px;
+
+  /* ── Spacing ──────────────────────────────────────────── */
+  --af-gutter: 32px;
+  --af-pad: 24px;
+  --af-pad-tight: 16px;
+
+  /* ── Focus (teal, outline-based) ──────────────────────── */
+  --af-focus-ring: 0 0 0 3px rgba(0, 201, 212, 0.35);
+}
+
+/* ─── Reset ───────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html {
+  font-family: var(--af-font-body);
+  font-size: 16px;
+  color: var(--af-ink);
+  background: var(--af-sky-field);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+body {
+  min-height: 100vh;
+  font-feature-settings: 'ss01' 1, 'cv11' 1, 'tnum' 0;
+}
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+input, select, textarea { font: inherit; color: inherit; }
+a { color: inherit; text-decoration: none; }
+img, svg { display: block; max-width: 100%; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+
+/* ─── Browser surfaces themed from palette ───────────────── */
+::selection {
+  background: rgba(0, 201, 212, 0.35);
+  color: var(--af-ink);
+}
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: rgba(203, 221, 240, 0.4); }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--af-chrome-2), #BFCDDF);
+  border: 2px solid rgba(203, 221, 240, 0.4);
+  border-radius: var(--af-r-pill);
+}
+::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #DAE5F2, #A8BBD2); }
+* { scrollbar-color: #BFCDDF rgba(203, 221, 240, 0.4); scrollbar-width: thin; }
+
+/* Caret colour follows the world */
+input, textarea { caret-color: var(--af-teal); }
+
+/* Focus ring, keyboard-only, teal outline + aqua halo */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--af-teal);
+  outline-offset: 2px;
+  box-shadow: var(--af-focus-ring);
+  border-radius: var(--af-r-xs);
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─── Type ─────────────────────────────────────────────── */
+.af-display {
+  font-family: var(--af-font-display);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--af-ink);
+  text-wrap: balance;
+}
+.af-h1 { font-size: clamp(32px, 4.2vw, 56px); }
+.af-h2 { font-size: clamp(24px, 2.6vw, 34px); }
+.af-h3 { font-size: clamp(18px, 1.5vw, 22px); font-weight: 600; letter-spacing: -0.02em; }
+.af-body { font-family: var(--af-font-body); font-size: 15px; line-height: 1.5; color: var(--af-ink-dim); }
+.af-muted { color: var(--af-ink-mute); }
+.af-mono {
+  font-family: var(--af-font-mono);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.af-mono-sm { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--af-ink-mute); }
+.af-tabular { font-variant-numeric: tabular-nums; }
+
+/* ─── Wordmark ─────────────────────────────────────────── */
+.af-wordmark {
+  font-family: var(--af-font-display);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--af-ink);
+  font-size: 22px;
+  line-height: 1;
+  display: inline-block;
+}
+.af-wordmark span {
+  color: var(--af-teal-ink);
+}
+
+/* ─── Chrome panel ─────────────────────────────────────── */
+.af-panel {
+  position: relative;
+  isolation: isolate;
+  background: var(--af-chrome-face);
+  color: var(--af-ink);
+  box-shadow:
+    var(--af-chrome-bevel-top),
+    var(--af-chrome-bevel-bottom),
+    var(--af-chrome-bevel-sides),
+    var(--af-chrome-outline),
+    var(--af-shadow-sm);
+}
+.af-panel--r-sm { border-radius: var(--af-r-sm); }
+.af-panel--r-md { border-radius: var(--af-r-md); }
+.af-panel--r-lg { border-radius: var(--af-r-lg); }
+.af-panel--padded { padding: var(--af-pad); }
+.af-panel--shine::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--af-chrome-specular);
+  border-radius: inherit;
+  mix-blend-mode: screen;
+}
+.af-panel--aqua {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 60%),
+    linear-gradient(180deg, #DEF1FA 0%, #B8DEF0 48%, #9FCEEA 100%);
+  color: var(--af-ink);
+}
+.af-panel--aqua::before {
+  background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.3) 40%, rgba(255,255,255,0) 58%);
+}
+.af-panel--ocean {
+  background: linear-gradient(180deg, #002E65 0%, #001533 100%);
+  color: #DFEDFF;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(0, 20, 48, 0.5),
+    var(--af-shadow-md);
+}
+.af-panel--ocean::before {
+  background: linear-gradient(180deg, rgba(0, 170, 220, 0.25) 0%, rgba(0, 170, 220, 0) 55%);
+}
+
+/* ─── Button ──────────────────────────────────────────── */
+.af-btn {
+  --btn-height: 44px;
+  --btn-pad-x: 20px;
+  --btn-radius: var(--af-r-pill);
+  height: var(--btn-height);
+  padding: 0 var(--btn-pad-x);
+  border-radius: var(--btn-radius);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  font-family: var(--af-font-body);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  color: var(--af-ink);
+  position: relative;
+  isolation: isolate;
+  transition: transform 160ms cubic-bezier(.2,.9,.3,1),
+              box-shadow 180ms ease,
+              filter 160ms ease;
+  will-change: transform;
+  user-select: none;
+}
+.af-btn:disabled { cursor: not-allowed; opacity: 0.55; }
+.af-btn--sm { --btn-height: 34px; --btn-pad-x: 14px; font-size: 13px; gap: 8px; }
+.af-btn--lg { --btn-height: 54px; --btn-pad-x: 28px; font-size: 16px; }
+.af-btn__label { position: relative; z-index: 1; }
+.af-btn__icon { display: inline-flex; align-items: center; z-index: 1; }
+
+.af-btn--primary {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 50%),
+    linear-gradient(180deg, #5AE6F0 0%, #00C9D4 60%, #00A3B0 100%);
+  color: #003E48;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(0, 48, 56, 0.35),
+    0 0 0 1px rgba(0, 72, 86, 0.3),
+    var(--af-shadow-sm);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.af-btn--primary:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.04); }
+.af-btn--primary:active:not(:disabled) { transform: translateY(0); filter: brightness(0.96); }
+
+.af-btn--ghost {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.4) 55%, rgba(255,255,255,0) 100%),
+    rgba(255, 255, 255, 0.5);
+  color: var(--af-ink);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(0, 36, 81, 0.12),
+    0 0 0 1px rgba(14, 55, 107, 0.2),
+    var(--af-shadow-xs);
+}
+.af-btn--ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.85); }
+
+.af-btn--quiet {
+  background: transparent;
+  color: var(--af-ink-dim);
+  padding: 0 12px;
+  box-shadow: none;
+}
+.af-btn--quiet:hover:not(:disabled) { color: var(--af-ink); background: rgba(0, 36, 81, 0.05); }
+
+.af-btn--danger {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 50%),
+    linear-gradient(180deg, #FF7FC2 0%, #FF4FAA 60%, #D4328A 100%);
+  color: #5A063A;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -1px 0 rgba(90, 6, 58, 0.35),
+    0 0 0 1px rgba(142, 14, 82, 0.35),
+    var(--af-shadow-sm);
+}
+
+.af-btn--loading .af-btn__label { opacity: 0.35; }
+.af-btn__spinner {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(0, 62, 72, 0.25);
+  border-top-color: #003E48;
+  animation: af-spin 820ms linear infinite;
+}
+@keyframes af-spin { to { transform: rotate(360deg); } }
+
+/* ─── Chip ────────────────────────────────────────────── */
+.af-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 10px;
+  border-radius: var(--af-r-pill);
+  font-family: var(--af-font-body);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--af-ink);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(0, 36, 81, 0.1),
+    0 0 0 1px rgba(14, 55, 107, 0.18);
+}
+.af-chip__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--af-ink-mute);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+}
+.af-chip--teal { color: var(--af-teal-ink); background: rgba(0, 201, 212, 0.14); }
+.af-chip--teal .af-chip__dot { background: var(--af-teal); }
+.af-chip--pink { color: var(--af-pink-ink); background: rgba(255, 79, 170, 0.12); }
+.af-chip--pink .af-chip__dot { background: var(--af-pink); }
+.af-chip--green { color: var(--af-green-ink); background: rgba(0, 166, 118, 0.12); }
+.af-chip--green .af-chip__dot { background: var(--af-green); }
+.af-chip--amber { color: var(--af-amber-ink); background: rgba(255, 176, 32, 0.16); }
+.af-chip--amber .af-chip__dot { background: var(--af-amber); }
+
+.af-chip--pulse .af-chip__dot {
+  animation: af-chip-pulse 1600ms ease-in-out infinite;
+}
+@keyframes af-chip-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 79, 170, 0.5); }
+  50% { box-shadow: 0 0 0 7px rgba(255, 79, 170, 0); }
+}
+
+/* ─── Field (input + optional toggle) — reused by login + folders ─── */
+.af-field { display: grid; gap: 8px; }
+.af-field__label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--af-ink-mute);
+}
+.af-field__slot {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.55) 60%, rgba(255, 255, 255, 0.35) 100%);
+  border-radius: var(--af-r-sm);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 36, 81, 0.18),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.6),
+    0 0 0 1px rgba(14, 55, 107, 0.22);
+  transition: box-shadow 160ms ease;
+}
+.af-field__slot:focus-within {
+  box-shadow:
+    inset 0 1px 2px rgba(0, 36, 81, 0.2),
+    0 0 0 2px var(--af-teal),
+    var(--af-focus-ring);
+}
+.af-field__slot input {
+  min-width: 0;
+  padding: 14px 16px;
+  background: transparent;
+  border: 0;
+  font-size: 16px;
+  font-family: var(--af-font-body);
+  font-weight: 600;
+  color: var(--af-ink);
+}
+.af-field__slot input::placeholder { color: var(--af-ink-mute); opacity: 0.7; }
+.af-field__slot input:focus { outline: none; }
+.af-field__toggle {
+  padding: 0 14px 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--af-teal-ink);
+  white-space: nowrap;
+}
+.af-field__toggle:hover { color: var(--af-ink); }
+.af-field__error {
+  margin: 0;
+  padding: 10px 14px;
+  background: rgba(255, 79, 170, 0.12);
+  color: var(--af-pink-ink);
+  border-radius: var(--af-r-xs);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(255, 79, 170, 0.3);
+}
