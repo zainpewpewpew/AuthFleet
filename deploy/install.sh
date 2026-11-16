@@ -62,13 +62,13 @@ fi
 # ─── Step 2: Build tools, Node.js 20+, sqlite3 ─────────
 # better-sqlite3 dan argon2 adalah native modules. Kalau VPS pakai Node yang
 # tidak punya prebuilt (misal Node 24), node-gyp akan compile dari source —
-# butuh make/gcc/g++/python3.
-if ! command -v make >/dev/null || ! command -v g++ >/dev/null; then
-  info "Install build tools (make, gcc, g++, python3) untuk compile native modules"
-  apt-get update -qq
-  apt-get install -y build-essential python3
-  ok "Build tools terpasang"
-fi
+# butuh make/gcc/g++/python3. apt-get install idempotent — kalau sudah ada,
+# cepat; kalau belum, install. Tidak pakai conditional supaya tidak ada
+# edge case "command -v menemukan make tapi npm ci tidak" yang bikin bingung.
+info "Pastikan build tools terpasang (build-essential, python3, pkg-config)"
+apt-get update -qq
+apt-get install -y build-essential python3 pkg-config
+ok "Build tools siap: $(make -v 2>/dev/null | head -1 || echo '???'), $(g++ --version 2>/dev/null | head -1 || echo '???')"
 
 if command -v node >/dev/null; then
   CURRENT_NODE=$(node -v | sed 's/v//;s/\..*//')
