@@ -4,13 +4,24 @@ Deploy AuthFleet ke VPS Ubuntu/Debian berdampingan dengan Sociofy, lewat Nginx s
 
 ## Quick Install (1 command)
 
-Kalau VPS Ubuntu/Debian sudah ada Nginx (dari Sociofy) dan Anda cuma mau install AuthFleet, pakai `install.sh`:
+Kalau VPS Ubuntu/Debian sudah ada Nginx (dari Sociofy) dan Anda cuma mau install AuthFleet, pakai `install.sh`.
 
+**Repo public (atau nanti kalau dibuat public):**
 ```bash
 # Di VPS, sebagai user dengan sudo:
 curl -fsSL https://raw.githubusercontent.com/zainpewpewpew/AuthFleet/main/deploy/install.sh -o install.sh
 sudo bash install.sh authfleet.sociofy.com
 ```
+
+**Repo private (default saat ini) — clone dulu pakai git auth yang sudah ada di VPS:**
+```bash
+# Di VPS:
+git clone https://github.com/zainpewpewpew/AuthFleet.git
+cd AuthFleet
+sudo bash deploy/install.sh authfleet.sociofy.com
+```
+
+Script otomatis detect kalau dijalankan dari dalam local clone → pakai file-file itu (via `rsync`), tidak clone ulang. Cocok untuk repo private tanpa harus di-publicize.
 
 Script akan:
 - Buat user `authfleet` terpisah

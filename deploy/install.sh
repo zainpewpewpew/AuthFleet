@@ -28,6 +28,16 @@ ok()   { echo "✓ $*"; }
 [[ -n "$DOMAIN" ]] || die "Butuh argumen domain. Contoh: sudo bash install.sh authfleet.sociofy.com"
 [[ "$DOMAIN" =~ ^[a-z0-9.-]+\.[a-z]{2,}$ ]] || die "Domain tidak valid: $DOMAIN"
 
+# Detect kalau dijalankan dari dalam clone lokal AuthFleet (bukan curl-piped).
+# Kalau ya, pakai clone itu sebagai source — hindari git clone ulang yang butuh
+# auth untuk repo private.
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+if [[ -f "$SCRIPT_DIR/../package.json" ]] && grep -q '"name": "authfleet"' "$SCRIPT_DIR/../package.json"; then
+  LOCAL_SOURCE="$( cd "$SCRIPT_DIR/.." && pwd )"
+else
+  LOCAL_SOURCE=""
+fi
+
 # ─── Prerequisites ─────────────────────────────────────
 command -v nginx >/dev/null || die "nginx belum terpasang di VPS ini"
 command -v openssl >/dev/null || die "openssl wajib ada (seharusnya default)"
@@ -70,13 +80,31 @@ if ! command -v sqlite3 >/dev/null; then
   ok "sqlite3 terpasang"
 fi
 
-# ─── Step 3: Clone repo ────────────────────────────────
+# ─── Step 3: Source code ───────────────────────────────
 if [[ -d "$INSTALL_DIR/.git" ]]; then
-  info "Repo sudah ada, git pull"
-  sudo -u $AUTHFLEET_USER git -C "$INSTALL_DIR" pull --ff-only
+  info "Repo sudah ada di $INSTALL_DIR"
+  if [[ -n "$LOCAL_SOURCE" && "$LOCAL_SOURCE" != "$INSTALL_DIR" ]]; then
+    info "Sync dari local clone $LOCAL_SOURCE (pakai rsync)"
+    command -v rsync >/dev/null || apt-get install -y rsync
+    rsync -a --delete --exclude=.next --exclude=node_modules --exclude=data \
+      "$LOCAL_SOURCE/" "$INSTALL_DIR/"
+    chown -R $AUTHFLEET_USER:$AUTHFLEET_USER "$INSTALL_DIR"
+  else
+    info "Update via git pull"
+    sudo -u $AUTHFLEET_USER git -C "$INSTALL_DIR" pull --ff-only || \
+      info "git pull gagal (mungkin repo private tanpa auth) — pakai state saat ini"
+  fi
+elif [[ -n "$LOCAL_SOURCE" ]]; then
+  info "Copy dari local clone $LOCAL_SOURCE → $INSTALL_DIR"
+  command -v rsync >/dev/null || apt-get install -y rsync
+  mkdir -p "$INSTALL_DIR"
+  rsync -a --exclude=.next --exclude=node_modules --exclude=data \
+    "$LOCAL_SOURCE/" "$INSTALL_DIR/"
+  chown -R $AUTHFLEET_USER:$AUTHFLEET_USER "$INSTALL_DIR"
 else
-  info "Clone AuthFleet repo"
-  sudo -u $AUTHFLEET_USER git clone "$REPO" "$INSTALL_DIR"
+  info "Clone AuthFleet dari GitHub (butuh auth kalau repo private)"
+  sudo -u $AUTHFLEET_USER git clone "$REPO" "$INSTALL_DIR" || \
+    die "Clone gagal. Repo mungkin private — clone manual dulu lalu run install.sh dari dalam folder: git clone <url> && cd AuthFleet && sudo bash deploy/install.sh $DOMAIN"
 fi
 ok "Source code di $INSTALL_DIR"
 
