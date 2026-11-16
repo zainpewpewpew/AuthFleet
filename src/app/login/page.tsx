@@ -126,10 +126,7 @@ export default function LoginPage() {
             </Button>
 
             <footer className="af-login__footer">
-              <span className="af-muted">
-                Belum punya password? Setel <code className="af-mono">AUTHFLEET_PASSWORD</code> di file{' '}
-                <code className="af-mono">.env</code> server lalu restart service.
-              </span>
+              <span className="af-muted">Lupa password? Cek dokumentasi untuk cara reset dari server.</span>
               <Link href="https://github.com/zainpewpewpew/AuthFleet" className="af-login__link">
                 Dokumentasi ↗
               </Link>
