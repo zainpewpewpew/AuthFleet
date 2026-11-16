@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/session';
 import { db, getFolder } from '@/lib/store';
 import { seal } from '@/lib/crypto';
+import { absoluteUrl } from '@/lib/url';
 
 async function guard() {
   const jar = await cookies();
@@ -52,10 +53,10 @@ function editFolder(req: NextRequest, id: string, body: { label?: string; tone?:
   `).run(
     ...(encrypted ? [label, tone, clientId, encrypted, id] : [label, tone, clientId, id]) as string[],
   );
-  return NextResponse.redirect(new URL(`/folders/${id}`, req.url), 303);
+  return NextResponse.redirect(absoluteUrl(req, `/folders/${id}`), 303);
 }
 
 function deleteFolder(req: NextRequest, id: string) {
   db().prepare('DELETE FROM folders WHERE id=?').run(id);
-  return NextResponse.redirect(new URL('/folders', req.url), 303);
+  return NextResponse.redirect(absoluteUrl(req, '/folders'), 303);
 }

@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/session';
 import { db, getFolder } from '@/lib/store';
 import { unseal, seal } from '@/lib/crypto';
+import { absoluteUrl } from '@/lib/url';
 import { google } from 'googleapis';
 
 /**
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token || !(await verifySessionToken(token))) {
-    return NextResponse.redirect(new URL('/login', req.url));
+    return NextResponse.redirect(absoluteUrl(req, '/login'));
   }
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
@@ -31,8 +32,8 @@ export async function GET(req: NextRequest) {
   const err = url.searchParams.get('error');
   const folderId = String(state || '').trim();
   const backTo = (reason: string) =>
-    NextResponse.redirect(new URL(`/folders${folderId ? '/' + folderId : ''}?oauth=${reason}`, req.url));
-  if (!folderId) return NextResponse.redirect(new URL('/folders?oauth=no-state', req.url));
+    NextResponse.redirect(absoluteUrl(req, `/folders${folderId ? '/' + folderId : ''}?oauth=${reason}`));
+  if (!folderId) return NextResponse.redirect(absoluteUrl(req, '/folders?oauth=no-state'));
   if (err) return backTo('denied');
   if (!code) return backTo('no-code');
 
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
   if (!row?.client_secret_enc) return backTo('no-secret');
   const secret = unseal(row.client_secret_enc);
 
-  const redirectUri = new URL('/api/oauth/callback', req.url).toString();
+  const redirectUri = absoluteUrl(req, '/api/oauth/callback').toString();
   const client = new google.auth.OAuth2(folder.client_id, secret, redirectUri);
   try {
     const { tokens } = await client.getToken(code);
@@ -67,7 +68,7 @@ export async function GET(req: NextRequest) {
         status = 'connected',
         connected_at = excluded.connected_at
     `).run(email, folderId, refresh, Date.now());
-    return NextResponse.redirect(new URL(`/folders/${folderId}?oauth=ok&email=${encodeURIComponent(email)}`, req.url));
+    return NextResponse.redirect(absoluteUrl(req, `/folders/${folderId}?oauth=ok&email=${encodeURIComponent(email)}`));
   } catch {
     return backTo('exchange-fail');
   }

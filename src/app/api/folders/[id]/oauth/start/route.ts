@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/session';
 import { getFolder } from '@/lib/store';
 import { unseal } from '@/lib/crypto';
+import { absoluteUrl } from '@/lib/url';
 import { google } from 'googleapis';
 import { db } from '@/lib/store';
 
@@ -13,23 +14,23 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
   if (!token || !(await verifySessionToken(token))) {
-    return NextResponse.redirect(new URL('/login', req.url));
+    return NextResponse.redirect(absoluteUrl(req, '/login'));
   }
   const folder = getFolder(id);
   if (!folder || !folder.client_id) {
-    return NextResponse.redirect(new URL(`/folders/${id}?oauth=no-client`, req.url));
+    return NextResponse.redirect(absoluteUrl(req, `/folders/${id}?oauth=no-client`));
   }
   const row = db().prepare('SELECT client_secret_enc FROM folders WHERE id=?').get(id) as { client_secret_enc: string | null };
   if (!row?.client_secret_enc) {
-    return NextResponse.redirect(new URL(`/folders/${id}?oauth=no-secret`, req.url));
+    return NextResponse.redirect(absoluteUrl(req, `/folders/${id}?oauth=no-secret`));
   }
   let secret: string;
   try { secret = unseal(row.client_secret_enc); }
-  catch { return NextResponse.redirect(new URL(`/folders/${id}?oauth=decrypt-fail`, req.url)); }
+  catch { return NextResponse.redirect(absoluteUrl(req, `/folders/${id}?oauth=decrypt-fail`)); }
 
   // Single redirect URI across all folders — operator registers one URL in
   // Google Cloud Console and every folder's OAuth client points at it.
-  const redirectUri = new URL('/api/oauth/callback', req.url).toString();
+  const redirectUri = absoluteUrl(req, '/api/oauth/callback').toString();
   const client = new google.auth.OAuth2(folder.client_id, secret, redirectUri);
   // A re-auth passes ?email=<address>: hint Google to that account AND force
   // consent so a fresh refresh_token is issued (otherwise reconnect returns

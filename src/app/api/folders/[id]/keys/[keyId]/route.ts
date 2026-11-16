@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/session';
 import { db } from '@/lib/store';
+import { absoluteUrl } from '@/lib/url';
 
 async function guard() {
   const jar = await cookies();
@@ -30,5 +31,5 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
 
 function doRevoke(req: NextRequest, folderId: string, keyId: string) {
   db().prepare('UPDATE api_keys SET revoked_at=? WHERE id=? AND folder_id=?').run(Date.now(), keyId, folderId);
-  return NextResponse.redirect(new URL(`/folders/${folderId}`, req.url), 303);
+  return NextResponse.redirect(absoluteUrl(req, `/folders/${folderId}`), 303);
 }

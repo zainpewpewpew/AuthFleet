@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/session';
 import { db } from '@/lib/store';
+import { absoluteUrl } from '@/lib/url';
 
 async function guard() {
   const jar = await cookies();
@@ -48,5 +49,5 @@ function doDisconnect(req: NextRequest, folderId: string, rawEmail: string) {
   if (accept.includes('application/json')) {
     return NextResponse.json({ ok: true, email });
   }
-  return NextResponse.redirect(new URL(`/folders/${folderId}?gmail=disconnected`, req.url), 303);
+  return NextResponse.redirect(absoluteUrl(req, `/folders/${folderId}?gmail=disconnected`), 303);
 }

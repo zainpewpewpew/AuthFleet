@@ -91,7 +91,6 @@ export function Sidebar({ folders }: { folders: SidebarFolder[] }) {
       <footer className="af-sidebar__footer">
         <div className="af-sidebar__footer-meta">
           <span className="af-mono af-mono-sm">v0.1.0</span>
-          <span className="af-muted" style={{ fontSize: 11 }}>· localhost</span>
         </div>
         <form action="/api/session" method="POST">
           <input type="hidden" name="_method" value="DELETE" />

@@ -1,17 +1,24 @@
+import { headers } from 'next/headers';
 import { Panel } from '@/components/Panel';
 import { Chip } from '@/components/Chip';
 import { countAll } from '@/lib/store';
 
 export const dynamic = 'force-dynamic';
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
   const counts = countAll();
+  const h = await headers();
+  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000';
+  const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+  const publicUrl = `${proto}://${host}`;
+  const isLocalhost = host.startsWith('localhost');
+
   return (
     <div className="af-settings">
       <header>
         <h1 className="af-display af-h1">Settings</h1>
         <p className="af-body">
-          Preferensi armada. Localhost-only — kredensial tidak pernah keluar laptop ini.
+          Preferensi armada. Kredensial OAuth terenkripsi AES-256-GCM di server.
         </p>
       </header>
 
@@ -19,7 +26,8 @@ export default function SettingsPage() {
         <h2 className="af-display af-h3" style={{ marginTop: 0 }}>Instance</h2>
         <dl className="af-settings__list">
           <div><dt>Versi</dt><dd className="af-mono">0.1.0 · y2k-frutiger-aero</dd></div>
-          <div><dt>Mode</dt><dd><Chip tone="green">localhost dev</Chip></dd></div>
+          <div><dt>Mode</dt><dd><Chip tone="green">{isLocalhost ? 'localhost dev' : 'production'}</Chip></dd></div>
+          <div><dt>Host</dt><dd className="af-mono">{host}</dd></div>
           <div><dt>Folder</dt><dd className="af-mono af-tabular">{counts.folders}</dd></div>
           <div><dt>Gmail</dt><dd className="af-mono af-tabular">{counts.gmails}</dd></div>
           <div><dt>API Keys aktif</dt><dd className="af-mono af-tabular">{counts.keys}</dd></div>
@@ -54,7 +62,7 @@ export default function SettingsPage() {
           Set <code className="af-mono">AUTHFLEET_API_KEY</code> di Agent env, lalu panggil:
         </p>
         <pre className="af-settings__snippet">
-{`POST http://localhost:3000/api/v1/otp/wait
+{`POST ${publicUrl}/api/v1/otp/wait
 Authorization: Bearer afk_live_xxx
 Content-Type: application/json
 

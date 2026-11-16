@@ -5,6 +5,7 @@ import {
   createSessionToken,
   operatorPassword,
 } from '@/lib/session';
+import { absoluteUrl } from '@/lib/url';
 
 /** POST: login (JSON body {password} OR form with _method override).  */
 export async function POST(req: NextRequest) {
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) { return clearSession(req); }
 
 function clearSession(req: NextRequest) {
-  const res = NextResponse.redirect(new URL('/login', req.url), 303);
+  const res = NextResponse.redirect(absoluteUrl(req, '/login'), 303);
   res.cookies.set(SESSION_COOKIE, '', {
     httpOnly: true,
     sameSite: 'lax',
