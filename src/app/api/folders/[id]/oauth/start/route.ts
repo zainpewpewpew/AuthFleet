@@ -27,7 +27,9 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   try { secret = unseal(row.client_secret_enc); }
   catch { return NextResponse.redirect(new URL(`/folders/${id}?oauth=decrypt-fail`, req.url)); }
 
-  const redirectUri = new URL(`/api/folders/${id}/oauth/callback`, req.url).toString();
+  // Single redirect URI across all folders — operator registers one URL in
+  // Google Cloud Console and every folder's OAuth client points at it.
+  const redirectUri = new URL('/api/oauth/callback', req.url).toString();
   const client = new google.auth.OAuth2(folder.client_id, secret, redirectUri);
   // A re-auth passes ?email=<address>: hint Google to that account AND force
   // consent so a fresh refresh_token is issued (otherwise reconnect returns
