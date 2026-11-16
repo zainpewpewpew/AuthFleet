@@ -148,6 +148,12 @@ ENVEOF
 fi
 
 # ─── Step 6: Systemd service ───────────────────────────
+# ReadWritePaths di unit file menunjuk data/ dan .next/. Dua direktori ini
+# wajib ada SEBELUM systemd setup mount namespace, kalau tidak service start
+# gagal dengan "Failed to set up mount namespacing: ... No such file or dir".
+sudo -u $AUTHFLEET_USER mkdir -p "$INSTALL_DIR/data" "$INSTALL_DIR/.next"
+chmod 700 "$INSTALL_DIR/data"
+
 SERVICE_FILE=/etc/systemd/system/authfleet.service
 if [[ -f "$SERVICE_FILE" ]]; then
   info "Update systemd service dari deploy/authfleet.service"
