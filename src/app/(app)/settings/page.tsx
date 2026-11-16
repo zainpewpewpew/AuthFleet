@@ -38,7 +38,7 @@ export default async function SettingsPage() {
       <Panel tone="chrome" radius="md">
         <h2 className="af-display af-h3" style={{ marginTop: 0 }}>Environment</h2>
         <p className="af-body af-muted">
-          Set di <code className="af-mono">.env.server</code> (produksi) atau <code className="af-mono">.env.local</code> (dev), lalu restart service AuthFleet.
+          Variabel yang dibaca server saat start. Dikelola lewat SSH di file <code className="af-mono">.env</code>.
         </p>
         <ul className="af-settings__env">
           <li>
@@ -47,11 +47,11 @@ export default async function SettingsPage() {
           </li>
           <li>
             <code className="af-mono">AUTHFLEET_SESSION_KEY</code>
-            <span className="af-muted">Base64 32 bytes untuk tanda tangan session JWT. Auto-seeded saat dev; produksi WAJIB set manual.</span>
+            <span className="af-muted">Base64 32 bytes untuk tanda tangan session JWT. Di-generate otomatis oleh installer.</span>
           </li>
           <li>
             <code className="af-mono">AUTHFLEET_ENCRYPT_KEY</code>
-            <span className="af-muted">Base64 32 bytes untuk AES-256-GCM OAuth client secrets + Gmail refresh tokens. Auto-seeded saat dev; produksi WAJIB set manual.</span>
+            <span className="af-muted">Base64 32 bytes untuk AES-256-GCM OAuth client secrets + Gmail refresh tokens. Di-generate otomatis oleh installer.</span>
           </li>
         </ul>
       </Panel>

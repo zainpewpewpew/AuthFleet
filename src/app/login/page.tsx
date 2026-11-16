@@ -37,7 +37,7 @@ export default function LoginPage() {
       }
       router.push('/dashboard');
     } catch (err) {
-      setError('Tidak bisa menghubungi server. Pastikan service AuthFleet jalan.');
+      setError('Tidak bisa menghubungi server. Coba beberapa saat lagi.');
       setBusy(false);
     }
   }
@@ -88,7 +88,7 @@ export default function LoginPage() {
         <Panel tone="chrome" radius="lg" className="af-login__card">
           <form onSubmit={submit} className="af-login__form" noValidate>
             <h2 className="af-display af-h2">Masuk dulu, kapten.</h2>
-            <p className="af-body af-muted">Gunakan password operator yang kamu set di <code className="af-mono">.env</code>.</p>
+            <p className="af-body af-muted">Gunakan password operator untuk masuk ke dashboard.</p>
 
             <label className="af-field">
               <span className="af-field__label">Password operator</span>
@@ -126,7 +126,7 @@ export default function LoginPage() {
             </Button>
 
             <footer className="af-login__footer">
-              <span className="af-muted">Lupa password? Cek dokumentasi untuk cara reset dari server.</span>
+              <span className="af-muted">Lupa password? Cek dokumentasi untuk cara reset.</span>
               <Link href="https://github.com/zainpewpewpew/AuthFleet" className="af-login__link">
                 Dokumentasi ↗
               </Link>
