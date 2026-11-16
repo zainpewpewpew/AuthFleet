@@ -43,9 +43,15 @@ command -v nginx >/dev/null || die "nginx belum terpasang di VPS ini"
 command -v openssl >/dev/null || die "openssl wajib ada (seharusnya default)"
 command -v curl >/dev/null || die "curl wajib ada"
 
-# Cek port 3000 tidak sedang dipakai Sociofy atau process lain
+# Cek port 3000. Kalau dipakai service authfleet (rerun), biarkan — nanti
+# di-restart oleh systemctl restart. Kalau dipakai process lain (Sociofy
+# atau yang lain), tolak untuk cegah konflik.
 if ss -tlnp 2>/dev/null | grep -qE ':3000[[:space:]]'; then
-  die "Port 3000 sedang dipakai process lain. AuthFleet butuh port ini."
+  if systemctl is-active --quiet authfleet 2>/dev/null; then
+    info "Port 3000 dipakai AuthFleet existing — akan di-restart"
+  else
+    die "Port 3000 sedang dipakai process lain (bukan AuthFleet). Stop dulu lalu ulang."
+  fi
 fi
 
 # ─── Step 1: User authfleet ────────────────────────────
