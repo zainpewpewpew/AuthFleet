@@ -11,10 +11,11 @@
 */
 
 /*
-  Fonts are loaded via `next/font/google` in src/app/layout.tsx, which
-  downloads the woff2 files at build time and serves them from this app's
-  origin (no runtime fetch to fonts.gstatic.com). The CSS variables
-  --af-font-* below bind to those self-hosted families.
+  Fonts are loaded via a <link rel="stylesheet"> to fonts.googleapis.com
+  in src/app/layout.tsx so the build itself never reaches Google (works on
+  restricted/offline VPS); the browser fetches the sheet on first paint.
+  The CSS variables --af-font-* below bind to those families with a
+  system-font fallback until the web font swaps in.
 */
 
 :root {
@@ -82,10 +83,10 @@
   --af-shadow-lg: 0 8px 20px rgba(10, 42, 92, 0.14),
                   0 28px 72px rgba(10, 42, 92, 0.2);
 
-  /* ── Type stacks (next/font sets var(--font-*) at build) ── */
-  --af-font-display: var(--font-display), ui-sans-serif, system-ui, sans-serif;
-  --af-font-body: var(--font-body), ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --af-font-mono: var(--font-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+  /* ── Type stacks — loaded via <link> in layout.tsx head ── */
+  --af-font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --af-font-body: 'Nunito', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --af-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* ── Radii ────────────────────────────────────────────── */
   --af-r-xs: 10px;
