@@ -29,11 +29,17 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
   const redirectUri = new URL(`/api/folders/${id}/oauth/callback`, req.url).toString();
   const client = new google.auth.OAuth2(folder.client_id, secret, redirectUri);
-  const url = client.generateAuthUrl({
+  // A re-auth passes ?email=<address>: hint Google to that account AND force
+  // consent so a fresh refresh_token is issued (otherwise reconnect returns
+  // no refresh_token and the 7-day clock on this device never resets).
+  const hintEmail = new URL(req.url).searchParams.get('email');
+  const authOptions: Parameters<typeof client.generateAuthUrl>[0] = {
     access_type: 'offline',
-    prompt: 'select_account',
     scope: ['https://www.googleapis.com/auth/gmail.readonly', 'openid', 'email'],
     state: id,
-  });
+    prompt: hintEmail ? 'consent' : 'select_account',
+  };
+  if (hintEmail) authOptions.login_hint = hintEmail;
+  const url = client.generateAuthUrl(authOptions);
   return NextResponse.redirect(url);
 }

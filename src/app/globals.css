@@ -369,6 +369,13 @@ input, textarea { caret-color: var(--af-teal); }
   background: var(--af-ink-mute);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
 }
+.af-chip__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
+}
+.af-chip__label svg { display: block; }
 .af-chip--teal { color: var(--af-teal-ink); background: rgba(0, 201, 212, 0.14); }
 .af-chip--teal .af-chip__dot { background: var(--af-teal); }
 .af-chip--pink { color: var(--af-pink-ink); background: rgba(255, 79, 170, 0.12); }

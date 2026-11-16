@@ -9,6 +9,8 @@ import {
   listGmails,
   listApiKeys,
   listRecentOtp,
+  gmailEffectiveStatus,
+  gmailLifecycle,
 } from '@/lib/store';
 import { maskEmail, relativeTime } from '@/lib/format';
 import './dashboard.css';
@@ -23,10 +25,16 @@ export default function DashboardPage() {
 
   // Per-folder stats for the grid
   const folderCards = folders.map((f) => {
-    const gmails = listGmails(f.id);
+    const gmails = listGmails(f.id).map((g) => ({
+      ...g,
+      effective: gmailEffectiveStatus(g),
+      life: gmailLifecycle(g.connected_at),
+    }));
     const keys = listApiKeys(f.id);
     const fresh = recent.filter((e) => e.folder_id === f.id).length;
-    return { ...f, gmails, keys, fresh };
+    const expiringSoon = gmails.filter((g) => g.effective === 'connected' && (g.life === 'warning' || g.life === 'critical')).length;
+    const needsReauth = gmails.filter((g) => g.effective === 'needs_relogin').length;
+    return { ...f, gmails, keys, fresh, expiringSoon, needsReauth };
   });
 
   return (
@@ -168,8 +176,14 @@ export default function DashboardPage() {
                       </div>
                     </dl>
                     <div className="af-folder-card__status">
-                      {f.gmails.some((g) => g.status === 'needs_relogin') ? (
-                        <Chip tone="pink">Reauth 1 gmail</Chip>
+                      {f.needsReauth > 0 ? (
+                        <Chip tone="pink">
+                          {f.needsReauth === 1 ? 'Reauth 1 gmail' : `${f.needsReauth} perlu reauth`}
+                        </Chip>
+                      ) : f.expiringSoon > 0 ? (
+                        <Chip tone="amber">
+                          {f.expiringSoon} akan kadaluarsa
+                        </Chip>
                       ) : f.gmails.some((g) => g.status === 'degraded') ? (
                         <Chip tone="amber">1 degraded</Chip>
                       ) : (

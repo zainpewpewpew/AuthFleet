@@ -6,10 +6,17 @@
  * The v1 wait endpoint polls every 1.5s up to the caller's timeout. Phase 2
  * will switch to Gmail history push notifications.
  */
-import { db } from './store';
+import { db, gmailLifecycle } from './store';
 import { verifyApiKey } from './apikey';
 import { unseal } from './crypto';
 import { google } from 'googleapis';
+
+export class ExpiredGmailError extends Error {
+  code = 'GMAIL_EXPIRED' as const;
+  constructor(email: string) {
+    super(`Grant Gmail ${email} sudah kadaluarsa — perlu izin ulang dari dashboard AuthFleet.`);
+  }
+}
 
 export type KeyLookup = {
   keyId: string;
@@ -69,8 +76,19 @@ export async function fetchLatestOtpFromGmail(
 ): Promise<GmailHit | null> {
   const folder = db().prepare('SELECT client_id FROM folders WHERE id=?').get(folderId) as { client_id: string | null } | undefined;
   const credRow = db().prepare('SELECT client_secret_enc FROM folders WHERE id=?').get(folderId) as { client_secret_enc: string | null } | undefined;
-  const gmailRow = db().prepare('SELECT refresh_token_enc FROM gmails WHERE email=? AND folder_id=?').get(email, folderId) as { refresh_token_enc: string | null } | undefined;
+  const gmailRow = db().prepare('SELECT refresh_token_enc, connected_at, status FROM gmails WHERE email=? AND folder_id=?').get(email, folderId) as { refresh_token_enc: string | null; connected_at: number; status: string } | undefined;
   if (!folder?.client_id || !credRow?.client_secret_enc || !gmailRow?.refresh_token_enc) return null;
+  // Refuse expired grants early with a specific error — Google would
+  // reject the request anyway, but surfacing it here keeps the OTP wait
+  // loop from spinning for a minute before failing.
+  if (gmailLifecycle(gmailRow.connected_at) === 'expired') {
+    // Keep the row's displayed status honest for the dashboard.
+    if (gmailRow.status === 'connected') {
+      db().prepare('UPDATE gmails SET status=? WHERE email=? AND folder_id=?')
+        .run('needs_relogin', email, folderId);
+    }
+    throw new ExpiredGmailError(email);
+  }
 
   const clientSecret = unseal(credRow.client_secret_enc);
   const refreshToken = unseal(gmailRow.refresh_token_enc);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveApiKey, fetchLatestOtpFromGmail, recordOtpEvent } from '@/lib/otp';
+import { resolveApiKey, fetchLatestOtpFromGmail, recordOtpEvent, ExpiredGmailError } from '@/lib/otp';
 
 const POLL_INTERVAL_MS = 1500;
 const MAX_TIMEOUT_MS = 240_000;
@@ -26,6 +26,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ code: hit.code, from: hit.from, subject: hit.subject, receivedAt: hit.receivedAt });
       }
     } catch (err) {
+      if (err instanceof ExpiredGmailError) {
+        return NextResponse.json({ error: err.message, code: 'GMAIL_EXPIRED', email }, { status: 410 });
+      }
       return NextResponse.json({ error: String((err as Error).message || 'Gmail error') }, { status: 500 });
     }
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));

@@ -52,7 +52,8 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       VALUES (?, ?, ?, 'connected', ?)
       ON CONFLICT(email, folder_id) DO UPDATE SET
         refresh_token_enc = COALESCE(excluded.refresh_token_enc, gmails.refresh_token_enc),
-        status = 'connected'
+        status = 'connected',
+        connected_at = excluded.connected_at
     `).run(email, id, refresh, Date.now());
     return NextResponse.redirect(new URL(`/folders/${id}?oauth=ok&email=${encodeURIComponent(email)}`, req.url));
   } catch (error) {

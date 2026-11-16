@@ -107,6 +107,41 @@ export type GmailRow = {
   last_otp_at: number | null;
   connected_at: number;
 };
+
+/**
+ * Google OAuth consent in Testing mode invalidates refresh_tokens after
+ * 7 days. AuthFleet surfaces that clock to the operator so re-authorize
+ * never comes as a surprise: a countdown chip shows on every Gmail row
+ * and the OTP endpoints refuse expired ones with a clear error.
+ */
+export const GMAIL_GRANT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export type GmailLifecycle = 'fresh' | 'warning' | 'critical' | 'expired';
+
+export function gmailExpiresAt(connectedAt: number): number {
+  return connectedAt + GMAIL_GRANT_TTL_MS;
+}
+
+export function gmailLifecycle(connectedAt: number): GmailLifecycle {
+  const remaining = gmailExpiresAt(connectedAt) - Date.now();
+  if (remaining <= 0) return 'expired';
+  if (remaining < 24 * 60 * 60 * 1000) return 'critical'; // < 1 day
+  if (remaining < 3 * 24 * 60 * 60 * 1000) return 'warning'; // < 3 days
+  return 'fresh';
+}
+
+/**
+ * The effective status for decisions and display: a Gmail that was
+ * marked 'connected' but whose 7-day grant has elapsed reads as
+ * 'needs_relogin' everywhere.
+ */
+export function gmailEffectiveStatus(row: { status: string; connected_at: number }):
+  'connected' | 'needs_relogin' | 'degraded' {
+  if (row.status === 'connected' && gmailLifecycle(row.connected_at) === 'expired') {
+    return 'needs_relogin';
+  }
+  return row.status as 'connected' | 'needs_relogin' | 'degraded';
+}
 export type ApiKeyRow = {
   id: string;
   folder_id: string;
@@ -163,19 +198,24 @@ export function countAll(): { folders: number; gmails: number; keys: number; otp
 
 export function getFoldersForSidebar() {
   const folders = listFolders();
-  return folders.map((f) => ({
-    id: f.id,
-    label: f.label,
-    tone: f.tone,
-    gmails: db().prepare('SELECT COUNT(*) AS n FROM gmails WHERE folder_id=?').get(f.id) as { n: number },
-    keys: db().prepare('SELECT COUNT(*) AS n FROM api_keys WHERE folder_id=? AND revoked_at IS NULL').get(f.id) as { n: number },
-  })).map((f) => ({
-    id: f.id,
-    label: f.label,
-    tone: f.tone,
-    gmails: (f.gmails as { n: number }).n,
-    keys: (f.keys as { n: number }).n,
-  }));
+  return folders.map((f) => {
+    const gmails = listGmails(f.id);
+    const keys = db().prepare('SELECT COUNT(*) AS n FROM api_keys WHERE folder_id=? AND revoked_at IS NULL').get(f.id) as { n: number };
+    // critical = any Gmail already expired or in its last day (needs operator action).
+    // warning = any Gmail in the 1–3 day expiry window.
+    const effectives = gmails.map((g) => ({ effective: gmailEffectiveStatus(g), life: gmailLifecycle(g.connected_at) }));
+    const critical = effectives.some((e) => e.effective === 'needs_relogin' || e.life === 'critical');
+    const warning = !critical && effectives.some((e) => e.life === 'warning');
+    const attention: 'none' | 'warning' | 'critical' = critical ? 'critical' : warning ? 'warning' : 'none';
+    return {
+      id: f.id,
+      label: f.label,
+      tone: f.tone,
+      gmails: gmails.length,
+      keys: keys.n,
+      attention,
+    };
+  });
 }
 
 /* ─── Seed (demo data on first launch) ──────────────── */
@@ -263,7 +303,12 @@ function seedIfEmpty(d: DbHandle) {
         const status = (fi === 0 && gi === f.gmails.length - 1) ? 'needs_relogin'
           : (fi === 2 && gi === f.gmails.length - 1) ? 'degraded'
           : 'connected';
-        insertGmail.run(email, folderId, status, now - gi * 1800_000, now - gi * 7200_000);
+        // Spread connected_at across the 7-day grant window so the dashboard
+        // demos all lifecycle tones: fresh (<4d), warning (4-6d), critical
+        // (6-7d), expired (>7d). (fi, gi) keep it deterministic per seed.
+        const ageHours = (fi * 42 + gi * 19) % 192; // 0..7.99 days
+        const connectedAt = now - ageHours * 3_600_000;
+        insertGmail.run(email, folderId, status, now - gi * 1800_000, connectedAt);
       }
 
       const keyCount = fi === 0 ? 2 : 1;

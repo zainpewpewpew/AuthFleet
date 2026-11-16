@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveApiKey, fetchLatestOtpFromGmail, recordOtpEvent } from '@/lib/otp';
+import { resolveApiKey, fetchLatestOtpFromGmail, recordOtpEvent, ExpiredGmailError } from '@/lib/otp';
 
 export async function GET(req: NextRequest) {
   const lookup = await resolveApiKey(req.headers.get('authorization'));
@@ -17,6 +17,9 @@ export async function GET(req: NextRequest) {
     recordOtpEvent(lookup.folderId, email, hit.code, hit.from, hit.subject, lookup.keyId);
     return NextResponse.json({ code: hit.code, from: hit.from, subject: hit.subject, receivedAt: hit.receivedAt });
   } catch (err) {
+    if (err instanceof ExpiredGmailError) {
+      return NextResponse.json({ error: err.message, code: 'GMAIL_EXPIRED', email }, { status: 410 });
+    }
     return NextResponse.json({ error: String((err as Error).message || 'Gmail error') }, { status: 500 });
   }
 }
