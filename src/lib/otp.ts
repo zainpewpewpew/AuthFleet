@@ -18,6 +18,21 @@ export class ExpiredGmailError extends Error {
   }
 }
 
+// Gmail treats `foo.bar@gmail.com`, `foobar@gmail.com`, and `foo+tag@gmail.com`
+// as the same inbox. Sociofy's aliasPool spends those variants per account,
+// but the `gmails` table stores only the canonical (dot-stripped, plus-stripped)
+// form, so lookups by the raw alias miss the row and the wait loop returns null
+// until timeout. Canonicalize at the lib boundary so every caller is covered.
+export function gmailCanonical(e: string): string {
+  if (!e) return e;
+  const at = e.indexOf('@');
+  if (at < 0) return e;
+  const domain = e.slice(at + 1).toLowerCase();
+  if (domain !== 'gmail.com' && domain !== 'googlemail.com') return e.toLowerCase();
+  const local = e.slice(0, at).toLowerCase().replace(/\./g, '').split('+')[0];
+  return `${local}@gmail.com`;
+}
+
 export type KeyLookup = {
   keyId: string;
   folderId: string;
@@ -43,12 +58,13 @@ export async function resolveApiKey(header: string | null): Promise<KeyLookup | 
 }
 
 export function recordOtpEvent(folderId: string, email: string, code: string, sender: string, subject: string, apiKeyId: string | null) {
+  const canonical = gmailCanonical(email);
   db().prepare(`
     INSERT INTO otp_events (folder_id, email, code, sender, subject, received_at, api_key_id)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(folderId, email, code, sender, subject, Date.now(), apiKeyId);
+  `).run(folderId, canonical, code, sender, subject, Date.now(), apiKeyId);
   db().prepare('UPDATE gmails SET last_otp_at=? WHERE email=? AND folder_id=?')
-    .run(Date.now(), email, folderId);
+    .run(Date.now(), canonical, folderId);
 }
 
 export function extractCode(text: string, digits: 6 | 8): string | null {
@@ -74,9 +90,10 @@ export async function fetchLatestOtpFromGmail(
   filter: string | null,
   sinceTs: number | null,
 ): Promise<GmailHit | null> {
+  const canonical = gmailCanonical(email);
   const folder = db().prepare('SELECT client_id FROM folders WHERE id=?').get(folderId) as { client_id: string | null } | undefined;
   const credRow = db().prepare('SELECT client_secret_enc FROM folders WHERE id=?').get(folderId) as { client_secret_enc: string | null } | undefined;
-  const gmailRow = db().prepare('SELECT refresh_token_enc, connected_at, status FROM gmails WHERE email=? AND folder_id=?').get(email, folderId) as { refresh_token_enc: string | null; connected_at: number; status: string } | undefined;
+  const gmailRow = db().prepare('SELECT refresh_token_enc, connected_at, status FROM gmails WHERE email=? AND folder_id=?').get(canonical, folderId) as { refresh_token_enc: string | null; connected_at: number; status: string } | undefined;
   if (!folder?.client_id || !credRow?.client_secret_enc || !gmailRow?.refresh_token_enc) return null;
   // Refuse expired grants early with a specific error — Google would
   // reject the request anyway, but surfacing it here keeps the OTP wait
@@ -85,9 +102,9 @@ export async function fetchLatestOtpFromGmail(
     // Keep the row's displayed status honest for the dashboard.
     if (gmailRow.status === 'connected') {
       db().prepare('UPDATE gmails SET status=? WHERE email=? AND folder_id=?')
-        .run('needs_relogin', email, folderId);
+        .run('needs_relogin', canonical, folderId);
     }
-    throw new ExpiredGmailError(email);
+    throw new ExpiredGmailError(canonical);
   }
 
   const clientSecret = unseal(credRow.client_secret_enc);
