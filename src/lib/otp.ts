@@ -98,8 +98,10 @@ export async function fetchLatestOtpFromGmail(
 
   const since = Math.max(1, Math.floor((sinceTs || Date.now() - 10 * 60_000) / 1000));
   const q = [`after:${since}`];
-  if (filter === 'instagram') q.push('from:(instagram.com OR facebookmail.com)');
-  else if (filter === 'meta') q.push('from:(facebookmail.com OR mail.instagram.com)');
+  // instagram + meta both resolve to the full Meta sender union so OTP
+  // and 2FA mails from any Meta subdomain are picked up without re-filtering.
+  if (filter === 'instagram' || filter === 'meta')
+    q.push('from:(instagram.com OR facebookmail.com OR mail.instagram.com OR meta.com OR facebook.com OR fb.com)');
   const list = await gmail.users.messages.list({ userId: 'me', q: q.join(' '), maxResults: 10 });
   const items = list.data.messages || [];
   for (const item of items) {
