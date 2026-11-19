@@ -21,6 +21,37 @@ import { google } from 'googleapis';
  * The old route still exists for backward compatibility with folders whose
  * OAuth clients were registered against the per-folder URL.
  */
+
+/**
+ * Parse email dari id_token JWT yang Google kembalikan di response token
+ * exchange. Alternatif ke panggilan `oauth2.userinfo.get()` yang menjadi hit
+ * API ekstra dari datacenter tepat setelah consent — pola yang dibaca Google
+ * sebagai "token baru langsung dipakai dari server asing" dan memicu
+ * perlindungan "Suspicious third-party access" yang sign-out semua sesi user
+ * di perangkat mereka. id_token sudah di-sign oleh Google via TLS token
+ * endpoint (yang sudah kita percayai untuk access_token), jadi cukup parse
+ * payload JWT tanpa verify signature ulang.
+ */
+function emailFromIdToken(idToken: string): string {
+  try {
+    const parts = idToken.split('.');
+    if (parts.length !== 3) return '';
+    const padded = parts[1] + '='.repeat((4 - (parts[1].length % 4)) % 4);
+    const b64 = padded.replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(Buffer.from(b64, 'base64').toString('utf8')) as {
+      email?: string;
+      email_verified?: boolean;
+      iss?: string;
+      aud?: string;
+    };
+    const iss = String(payload.iss || '');
+    if (iss !== 'https://accounts.google.com' && iss !== 'accounts.google.com') return '';
+    return String(payload.email || '').trim().toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
 export async function GET(req: NextRequest) {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
@@ -48,13 +79,10 @@ export async function GET(req: NextRequest) {
   const client = new google.auth.OAuth2(folder.client_id, secret, redirectUri);
   try {
     const { tokens } = await client.getToken(code);
-    client.setCredentials(tokens);
-    let email = '';
-    try {
-      const oauth2 = google.oauth2({ version: 'v2', auth: client });
-      const me = await oauth2.userinfo.get();
-      email = String(me.data?.email || '').trim().toLowerCase();
-    } catch { /* fall through */ }
+    // Scope start/route meminta 'openid email' sehingga Google selalu
+    // mengembalikan id_token dengan claim email. Parse langsung — zero
+    // API call ekstra setelah consent, selain token exchange yang wajib.
+    const email = tokens.id_token ? emailFromIdToken(tokens.id_token) : '';
     if (!email) return backTo('no-email');
     if (!tokens.refresh_token) {
       const existing = db().prepare('SELECT refresh_token_enc FROM gmails WHERE email=? AND folder_id=?').get(email, folderId) as { refresh_token_enc: string | null } | undefined;
