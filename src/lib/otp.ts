@@ -6,10 +6,12 @@
  * The v1 wait endpoint polls every 1.5s up to the caller's timeout. Phase 2
  * will switch to Gmail history push notifications.
  */
-import { db, gmailLifecycle } from './store';
+import { db, gmailLifecycle, effectiveProxyEnc } from './store';
 import { verifyApiKey } from './apikey';
 import { unseal } from './crypto';
+import { buildProxyAgent } from './proxy';
 import { google } from 'googleapis';
+import type { GaxiosOptions } from 'gaxios';
 
 export class ExpiredGmailError extends Error {
   code = 'GMAIL_EXPIRED' as const;
@@ -168,6 +170,24 @@ export async function fetchLatestOtpFromGmail(
   const refreshToken = unseal(gmailRow.refresh_token_enc);
   const oauth = new google.auth.OAuth2(folder.client_id, clientSecret);
   oauth.setCredentials({ refresh_token: refreshToken });
+
+  // Proxy mobile sticky (biasanya Multilogin) dipakai per-gmail; folder level
+  // default kalau per-gmail kosong. Agent dipasang di dua titik: transporter
+  // OAuth2 agar auto-refresh access_token keluar lewat proxy, dan per-call
+  // options di `messages.list` + `messages.get` agar panggilan Gmail API
+  // juga ikut keluar lewat IP mobile. Tanpa proxy, request keluar dari IP
+  // VPS datacenter dan memicu Google protection sign-out semua sesi user.
+  const proxyEnc = effectiveProxyEnc(folderId, canonical);
+  const proxyUrl = proxyEnc ? unseal(proxyEnc) : null;
+  const proxyAgent = buildProxyAgent(proxyUrl);
+  if (proxyAgent) {
+    const transporter = (oauth as unknown as { transporter: { defaults: { agent?: unknown } } }).transporter;
+    if (transporter?.defaults) transporter.defaults.agent = proxyAgent;
+  }
+  const callOpts: GaxiosOptions | undefined = proxyAgent
+    ? ({ agent: proxyAgent } as unknown as GaxiosOptions)
+    : undefined;
+
   const gmail = google.gmail({ version: 'v1', auth: oauth });
 
   const since = Math.max(1, Math.floor((sinceTs || Date.now() - 10 * 60_000) / 1000));
@@ -194,7 +214,7 @@ export async function fetchLatestOtpFromGmail(
   };
   let list;
   try {
-    list = await gmail.users.messages.list({ userId: 'me', q: q.join(' '), maxResults: 10 });
+    list = await gmail.users.messages.list({ userId: 'me', q: q.join(' '), maxResults: 10 }, callOpts);
   } catch (err) {
     if (isInvalidGrant(err)) markDead();
     throw err;
@@ -205,7 +225,7 @@ export async function fetchLatestOtpFromGmail(
     let msg;
     try {
       msg = await gmail.users.messages.get({ userId: 'me', id: item.id, format: 'metadata',
-        metadataHeaders: ['Subject', 'From', 'Date'] });
+        metadataHeaders: ['Subject', 'From', 'Date'] }, callOpts);
     } catch (err) {
       // Mid-iterasi messages.get juga bisa kena invalid_grant (refresh token
       // mati di antara dua call). Perlakuan sama supaya Agent dapat 410 cepat.

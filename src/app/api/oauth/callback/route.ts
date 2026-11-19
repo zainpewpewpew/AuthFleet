@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/session';
-import { db, getFolder } from '@/lib/store';
+import { db, getFolder, getFolderProxyEnc } from '@/lib/store';
 import { unseal, seal } from '@/lib/crypto';
+import { buildProxyAgent } from '@/lib/proxy';
 import { absoluteUrl } from '@/lib/url';
 import { google } from 'googleapis';
 
@@ -77,6 +78,21 @@ export async function GET(req: NextRequest) {
 
   const redirectUri = absoluteUrl(req, '/api/oauth/callback').toString();
   const client = new google.auth.OAuth2(folder.client_id, secret, redirectUri);
+
+  // Callback jalan sebelum tahu email yang di-connect (identitas diparse dari
+  // id_token setelah getToken). Jadi proxy yang dipakai di titik ini hanya
+  // level folder (default). Per-gmail override berlaku dari OTP wait pertama
+  // ke depan, bukan di saat connect pertama. Tetap efektif karena yang paling
+  // kritis ditandai Google adalah seluruh rantai request pasca-consent: kalau
+  // getToken sudah keluar lewat mobile IP, impossible-travel signal hilang.
+  const folderProxyEnc = getFolderProxyEnc(folderId);
+  const folderProxyUrl = folderProxyEnc ? unseal(folderProxyEnc) : null;
+  const folderProxyAgent = buildProxyAgent(folderProxyUrl);
+  if (folderProxyAgent) {
+    const transporter = (client as unknown as { transporter: { defaults: { agent?: unknown } } }).transporter;
+    if (transporter?.defaults) transporter.defaults.agent = folderProxyAgent;
+  }
+
   try {
     const { tokens } = await client.getToken(code);
     // Scope start/route meminta 'openid email' sehingga Google selalu

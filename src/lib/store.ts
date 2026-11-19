@@ -29,6 +29,25 @@ function ensureDataDir() {
   }
 }
 
+/**
+ * Idempotent migrations: setiap kolom baru diperiksa lewat PRAGMA table_info
+ * sebelum di-ALTER, sehingga restart service di DB yang sudah bermigrasi tidak
+ * mengulang perintah. Kolom proxy_url_enc per folder dipakai sebagai default
+ * fallback, per-gmail override di gmails. Desain 1 IP = 1 gmail agar 5 akun
+ * Instagram yang di-signup lewat dot/plus alias dari satu canonical gmail tetap
+ * terlihat alami di sisi Google (1 sticky mobile IP seumur hidup refresh token).
+ */
+function runMigrations(d: DbHandle) {
+  const folderCols = d.pragma('table_info(folders)') as Array<{ name: string }>;
+  if (!folderCols.some((c) => c.name === 'proxy_url_enc')) {
+    d.exec('ALTER TABLE folders ADD COLUMN proxy_url_enc TEXT;');
+  }
+  const gmailCols = d.pragma('table_info(gmails)') as Array<{ name: string }>;
+  if (!gmailCols.some((c) => c.name === 'proxy_url_enc')) {
+    d.exec('ALTER TABLE gmails ADD COLUMN proxy_url_enc TEXT;');
+  }
+}
+
 function openDb(): DbHandle {
   ensureDataDir();
   const db = new Database(DB_FILE);
@@ -41,6 +60,7 @@ function openDb(): DbHandle {
       tone TEXT NOT NULL DEFAULT '#00C9D4',
       client_id TEXT,
       client_secret_enc TEXT,
+      proxy_url_enc TEXT,
       created_at INTEGER NOT NULL,
       seed INTEGER NOT NULL DEFAULT 0
     );
@@ -48,6 +68,7 @@ function openDb(): DbHandle {
       email TEXT NOT NULL,
       folder_id TEXT NOT NULL,
       refresh_token_enc TEXT,
+      proxy_url_enc TEXT,
       status TEXT NOT NULL DEFAULT 'connected',
       last_otp_at INTEGER,
       connected_at INTEGER NOT NULL,
@@ -80,6 +101,7 @@ function openDb(): DbHandle {
     CREATE INDEX IF NOT EXISTS idx_gmails_folder ON gmails(folder_id);
     CREATE INDEX IF NOT EXISTS idx_keys_folder ON api_keys(folder_id);
   `);
+  runMigrations(db);
   return db;
 }
 
@@ -194,6 +216,31 @@ export function countAll(): { folders: number; gmails: number; keys: number; otp
       (SELECT COUNT(*) FROM otp_events WHERE received_at > ?) AS otps7d
   `).get(Date.now() - 7 * 24 * 3600 * 1000) as { folders: number; gmails: number; keys: number; otps7d: number };
   return row;
+}
+
+/* ─── Proxy binding (per folder default + per gmail override) ─── */
+
+export function getFolderProxyEnc(id: string): string | null {
+  const row = db().prepare('SELECT proxy_url_enc FROM folders WHERE id=?').get(id) as { proxy_url_enc: string | null } | undefined;
+  return row?.proxy_url_enc ?? null;
+}
+export function setFolderProxyEnc(id: string, enc: string | null): void {
+  db().prepare('UPDATE folders SET proxy_url_enc=? WHERE id=?').run(enc, id);
+}
+export function getGmailProxyEnc(folderId: string, email: string): string | null {
+  const row = db().prepare('SELECT proxy_url_enc FROM gmails WHERE folder_id=? AND email=?').get(folderId, email) as { proxy_url_enc: string | null } | undefined;
+  return row?.proxy_url_enc ?? null;
+}
+export function setGmailProxyEnc(folderId: string, email: string, enc: string | null): void {
+  db().prepare('UPDATE gmails SET proxy_url_enc=? WHERE folder_id=? AND email=?').run(enc, folderId, email);
+}
+/**
+ * Resolve proxy aktif untuk 1 panggilan Google API: per-gmail menang,
+ * folder default jadi fallback, nol-kedua null (tak ada proxy → request
+ * keluar langsung dari VPS, yang ada risiko sign-out kembali).
+ */
+export function effectiveProxyEnc(folderId: string, email: string): string | null {
+  return getGmailProxyEnc(folderId, email) || getFolderProxyEnc(folderId);
 }
 
 export function getFoldersForSidebar() {

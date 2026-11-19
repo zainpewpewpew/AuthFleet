@@ -6,10 +6,14 @@ import { Chip } from '@/components/Chip';
 import { Button } from '@/components/Button';
 import { KeyGenerator } from './KeyGenerator';
 import { GmailActions } from './GmailActions';
+import { FolderProxyPanel } from './FolderProxyPanel';
 import {
   getFolder, listGmails, listApiKeys, listRecentOtp,
   gmailEffectiveStatus, gmailExpiresAt, gmailLifecycle,
+  getFolderProxyEnc, getGmailProxyEnc,
 } from '@/lib/store';
+import { unseal } from '@/lib/crypto';
+import { maskProxyUrl } from '@/lib/proxy';
 import { maskEmail, relativeTime } from '@/lib/format';
 import './folder-detail.css';
 
@@ -69,6 +73,22 @@ export default async function FolderDetailPage({
 
   const gmailsRaw = listGmails(id);
   const gmails = gmailsRaw.map((g) => ({ ...g, effective: gmailEffectiveStatus(g), life: gmailLifecycle(g.connected_at) }));
+
+  // Proxy state untuk panel bawah. Decrypt hanya di server lalu mask credential
+  // sebelum dikirim ke komponen client, supaya password Multilogin tidak pernah
+  // terlihat di HTML view-source atau client state.
+  const folderProxyEnc = getFolderProxyEnc(id);
+  const folderProxyUrl = folderProxyEnc ? unseal(folderProxyEnc) : null;
+  const folderProxyMasked = folderProxyUrl ? maskProxyUrl(folderProxyUrl) : null;
+  const proxyGmailEntries = gmailsRaw.map((g) => {
+    const enc = getGmailProxyEnc(id, g.email);
+    const url = enc ? unseal(enc) : null;
+    return {
+      email: g.email,
+      maskedOwn: url ? maskProxyUrl(url) : null,
+      hasOwnProxy: Boolean(url),
+    };
+  });
   const keys = listApiKeys(id);
   const recent = listRecentOtp(100).filter((e) => e.folder_id === id).slice(0, 12);
   const freshKey = sp.newKey;
@@ -259,6 +279,14 @@ export default async function FolderDetailPage({
           </ul>
         </Panel>
       </div>
+
+      {/* ─── Proxy exit ─── */}
+      <FolderProxyPanel
+        folderId={id}
+        initialFolderMasked={folderProxyMasked}
+        folderHasProxy={Boolean(folderProxyUrl)}
+        gmails={proxyGmailEntries}
+      />
 
       {/* ─── Activity ─── */}
       <Panel tone="chrome" radius="md" padded={false} className="af-folder__activity">
