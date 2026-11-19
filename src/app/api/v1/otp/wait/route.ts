@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveApiKey, fetchLatestOtpFromGmail, recordOtpEvent, ExpiredGmailError } from '@/lib/otp';
+import { resolveApiKey, fetchLatestOtpFromGmail, recordOtpEvent, ExpiredGmailError, GmailNotConfiguredError } from '@/lib/otp';
 
 const POLL_INTERVAL_MS = 1500;
 const MAX_TIMEOUT_MS = 240_000;
@@ -29,11 +29,19 @@ export async function POST(req: NextRequest) {
       if (err instanceof ExpiredGmailError) {
         return NextResponse.json({ error: err.message, code: 'GMAIL_EXPIRED', email }, { status: 410 });
       }
+      if (err instanceof GmailNotConfiguredError) {
+        return NextResponse.json({ error: err.message, code: 'GMAIL_NOT_CONFIGURED', email }, { status: 404 });
+      }
       return NextResponse.json({ error: String((err as Error).message || 'Gmail error') }, { status: 500 });
     }
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
-  return NextResponse.json({ code: null, error: 'timeout' }, { status: 408 });
+  // Field `code` dipakai dua arah di API ini: pada sukses berisi digit OTP,
+  // pada 408 berisi tag error 'OTP_TIMEOUT'. Status 408 (bukan 2xx) membuat
+  // caller Sociofy Agent tidak salah membacanya sebagai OTP yang valid, dan
+  // tag ini mengisi err.code sehingga handleAutoOtp bisa langsung memicu
+  // jalur resend tanpa regex pesan.
+  return NextResponse.json({ code: 'OTP_TIMEOUT', error: 'timeout' }, { status: 408 });
 }
 
 export const runtime = 'nodejs';

@@ -18,6 +18,56 @@ export class ExpiredGmailError extends Error {
   }
 }
 
+/**
+ * Dipakai saat route wait diminta email yang TIDAK pernah disambungkan ke
+ * folder yang API key-nya dipakai. Sebelumnya kasus ini dibiarkan menjadi
+ * "null → terus polling sampai 408 timeout", padahal mustahil ada OTP: tanpa
+ * refresh token kita tidak bisa buka inbox Gmail-nya. Membalas 404 cepat
+ * supaya caller (Sociofy Agent) bisa swap ke Gmail lain tanpa tunggu.
+ */
+export class GmailNotConfiguredError extends Error {
+  code = 'GMAIL_NOT_CONFIGURED' as const;
+  constructor(email: string) {
+    super(`Gmail ${email} belum disambungkan ke folder AuthFleet yang dipakai API key ini.`);
+  }
+}
+
+/**
+ * Hanya error yang jelas-jelas menandakan refresh token mati di sisi Google:
+ * invalid_grant (user mencabut, password berubah, Testing-mode auto-revoke),
+ * atau 401 Unauthorized dengan reason authError/invalidCredentials. Error 5xx,
+ * timeout, atau 403 rate-limit TIDAK dihitung sebagai grant mati — mereka
+ * transient dan grant sebenarnya masih hidup; menandainya needs_relogin akan
+ * salah lempar operator ke halaman re-OAuth untuk Gmail yang baik-baik saja.
+ */
+function isInvalidGrant(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const anyErr = err as {
+    response?: { data?: { error?: string; error_description?: string }; status?: number };
+    status?: number;
+    code?: string | number;
+    message?: string;
+    errors?: Array<{ reason?: string; message?: string }>;
+  };
+  const dataError = String(anyErr.response?.data?.error || '').toLowerCase();
+  if (dataError === 'invalid_grant' || dataError === 'unauthorized_client') return true;
+  const message = String(anyErr.message || '').toLowerCase();
+  if (/invalid[_ ]grant|token has been expired or revoked|invalid credentials|unauthorized_client/.test(message)) return true;
+  if (Array.isArray(anyErr.errors)) {
+    for (const entry of anyErr.errors) {
+      const reason = String(entry?.reason || '').toLowerCase();
+      if (reason === 'autherror' || reason === 'authenticated' || reason === 'invalidcredentials') return true;
+    }
+  }
+  // googleapis OAuth2.refreshTokenNoCache melempar HTTP 400 dengan data.error=invalid_grant;
+  // Gmail API call berikutnya tanpa token baru bisa muncul sebagai 401 tanpa body
+  // yang dikenali. Treat 401 dari sumber auth sebagai jelas-jelas mati — grant lain
+  // (403 scope, 5xx server) tidak pernah lewat sini.
+  const status = anyErr.response?.status ?? (typeof anyErr.status === 'number' ? anyErr.status : null);
+  if (status === 401) return true;
+  return false;
+}
+
 // Gmail treats `foo.bar@gmail.com`, `foobar@gmail.com`, and `foo+tag@gmail.com`
 // as the same inbox. Sociofy's aliasPool spends those variants per account,
 // but the `gmails` table stores only the canonical (dot-stripped, plus-stripped)
@@ -94,7 +144,14 @@ export async function fetchLatestOtpFromGmail(
   const folder = db().prepare('SELECT client_id FROM folders WHERE id=?').get(folderId) as { client_id: string | null } | undefined;
   const credRow = db().prepare('SELECT client_secret_enc FROM folders WHERE id=?').get(folderId) as { client_secret_enc: string | null } | undefined;
   const gmailRow = db().prepare('SELECT refresh_token_enc, connected_at, status FROM gmails WHERE email=? AND folder_id=?').get(canonical, folderId) as { refresh_token_enc: string | null; connected_at: number; status: string } | undefined;
-  if (!folder?.client_id || !credRow?.client_secret_enc || !gmailRow?.refresh_token_enc) return null;
+  // Folder tanpa client_id/secret adalah bug konfigurasi admin AuthFleet,
+  // bukan sesuatu yang bisa diselesaikan dengan swap: tetap balas null supaya
+  // route polling sampai timeout (operator wajib betulkan folder di dashboard).
+  if (!folder?.client_id || !credRow?.client_secret_enc) return null;
+  // Gmail tidak ada di folder yang API key-nya dipakai → tidak akan pernah
+  // ada OTP masuk. Lempar cepat supaya caller bisa swap ke Gmail lain alih-alih
+  // menunggu seluruh timeout wait loop.
+  if (!gmailRow?.refresh_token_enc) throw new GmailNotConfiguredError(canonical);
   // Refuse expired grants early with a specific error — Google would
   // reject the request anyway, but surfacing it here keeps the OTP wait
   // loop from spinning for a minute before failing.
@@ -120,12 +177,41 @@ export async function fetchLatestOtpFromGmail(
   // the caller having to switch filter keys as new platforms come online.
   if (filter === 'instagram' || filter === 'meta' || filter === 'tiktok')
     q.push('from:(instagram.com OR facebookmail.com OR mail.instagram.com OR meta.com OR facebook.com OR fb.com OR tiktok.com OR tiktokmail.com OR accounts.tiktok.com)');
-  const list = await gmail.users.messages.list({ userId: 'me', q: q.join(' '), maxResults: 10 });
+  // Google kadang mencabut refresh token sebelum 7-hari (Testing-mode auto-revoke,
+  // user mengubah password, aktivitas security). Tanpa catch khusus, error
+  // invalid_grant hanya dilempar sebagai HTTP 500 oleh route sehingga baris
+  // gmails tetap bertuliskan 'connected' sampai jendela 7-hari real-time
+  // habis — operator melihat OTP tak kunjung masuk tapi dashboard masih
+  // menampilkan Gmail "siap pakai". Catch di dua pemanggilan Gmail API,
+  // flip status + lempar ExpiredGmailError supaya route membalas 410 dan
+  // caller (Sociofy Agent) bisa swap ke Gmail cadangan.
+  const markDead = (): never => {
+    if (gmailRow.status === 'connected') {
+      db().prepare('UPDATE gmails SET status=? WHERE email=? AND folder_id=?')
+        .run('needs_relogin', canonical, folderId);
+    }
+    throw new ExpiredGmailError(canonical);
+  };
+  let list;
+  try {
+    list = await gmail.users.messages.list({ userId: 'me', q: q.join(' '), maxResults: 10 });
+  } catch (err) {
+    if (isInvalidGrant(err)) markDead();
+    throw err;
+  }
   const items = list.data.messages || [];
   for (const item of items) {
     if (!item.id) continue;
-    const msg = await gmail.users.messages.get({ userId: 'me', id: item.id, format: 'metadata',
-      metadataHeaders: ['Subject', 'From', 'Date'] });
+    let msg;
+    try {
+      msg = await gmail.users.messages.get({ userId: 'me', id: item.id, format: 'metadata',
+        metadataHeaders: ['Subject', 'From', 'Date'] });
+    } catch (err) {
+      // Mid-iterasi messages.get juga bisa kena invalid_grant (refresh token
+      // mati di antara dua call). Perlakuan sama supaya Agent dapat 410 cepat.
+      if (isInvalidGrant(err)) markDead();
+      throw err;
+    }
     const headers = Object.fromEntries((msg.data.payload?.headers || []).map(h => [String(h.name), String(h.value)]));
     const subject = headers['Subject'] || '';
     const from = headers['From'] || '';
