@@ -54,6 +54,8 @@ function describeOauth(code: string | undefined, email?: string): Notice | null 
     case 'decrypt-fail': return { tone: 'pink', title: 'Gagal decrypt OAuth secret', body: 'AUTHFLEET_ENCRYPT_KEY mungkin berubah. Paste ulang Client Secret di folder ini.' };
     case 'no-email': return { tone: 'pink', title: 'Google tidak mengembalikan email', body: 'Scope "email" mungkin tidak granted. Coba lagi dan terima semua scope.' };
     case 'no-refresh': return { tone: 'amber', title: 'Google tidak mengembalikan refresh token', body: 'Buka myaccount.google.com → Keamanan → Aplikasi pihak ketiga, cabut akses AuthFleet, lalu sambung ulang.' };
+    case 'proxy-timeout': return { tone: 'pink', title: 'Proxy timeout saat tukar kode OAuth', body: 'Proxy folder tidak merespon dalam 25 detik. Buka Pengaturan Proxy folder, test ulang URL, pastikan credential Multilogin masih aktif.' };
+    case 'proxy-fail': return { tone: 'pink', title: 'Proxy folder menolak koneksi', body: 'Proxy menolak atau unreachable (ECONNREFUSED/407). Cek URL, port, auth di panel Proxy folder.' };
     case 'exchange-fail': return { tone: 'pink', title: 'Gagal tukar kode → token', body: 'Pastikan Client ID + Secret di folder ini cocok dengan yang di Google Cloud Console.' };
     default: return { tone: 'neutral', title: `OAuth: ${code}` };
   }
