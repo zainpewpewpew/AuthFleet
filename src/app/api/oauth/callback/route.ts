@@ -54,14 +54,72 @@ function emailFromIdToken(idToken: string): string {
 }
 
 /**
- * Hard timeout untuk token exchange. Default googleapis/gaxios tidak set
- * timeout di socket, jadi kalau proxy agent yang di-inject ke transporter
- * stuck (proxy mati / credential salah / port tidak dengar), request
- * menunggu tanpa batas dan Cloudflare di depan reply 504 Gateway Timeout
- * setelah ~100s. Batas 25s di bawah Cloudflare → callback selalu kembali
- * ke operator dengan error banner, bukan halaman putih 504.
+ * Hard timeout untuk SATU attempt token exchange. Dengan retry 3 kali +
+ * backoff 2s, total worst-case: 3 * 15s + 2 * 2s = 49s, masih di bawah
+ * Cloudflare 504 (~100s).
+ *
+ * Proxy mobile Multilogin terbukti intermittent (log menunjukkan pola
+ * timeout-timeout-OK-reject-OK pada folder yang sama dalam 10 menit).
+ * Code OAuth Google adalah one-time use, tapi hanya di-consumed kalau
+ * request SAMPAI ke Google; kegagalan di layer transport (TCP/SOCKS
+ * handshake, 15s timeout tanpa response) berarti code masih valid dan
+ * attempt kedua aman. Error setelah Google menerima (4xx body) tidak
+ * di-retry — code sudah terpakai.
  */
-const TOKEN_EXCHANGE_TIMEOUT_MS = 25_000;
+const TOKEN_EXCHANGE_TIMEOUT_MS = 15_000;
+const TOKEN_EXCHANGE_MAX_ATTEMPTS = 3;
+const TOKEN_EXCHANGE_BACKOFF_MS = 2_000;
+
+type TokenPayload = {
+  id_token?: string | null;
+  refresh_token?: string | null;
+  access_token?: string | null;
+  expiry_date?: number | null;
+};
+
+/**
+ * Pola error yang jelas-jelas di layer transport (sebelum Google terima
+ * request). Hanya kasus ini yang di-retry. Error dari Google (400/401
+ * invalid_grant dll) memiliki `response.status` dan tidak match.
+ */
+function isTransportError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const anyErr = err as { code?: string; message?: string; response?: { status?: number } };
+  if (anyErr.response && typeof anyErr.response.status === 'number') return false;
+  const msg = String(anyErr.message || '').toLowerCase();
+  if (anyErr.code === 'ECONNRESET' || anyErr.code === 'ECONNREFUSED' ||
+      anyErr.code === 'ETIMEDOUT' || anyErr.code === 'ENOTFOUND' ||
+      anyErr.code === 'EPIPE' || anyErr.code === 'ERR_SOCKET_CLOSED') return true;
+  return /socks|tunneling socket|socket hang up|network error|fetch failed|epipe|proxy connect|rejected connection/i.test(msg);
+}
+
+async function getTokenWithRetry(
+  client: InstanceType<typeof google.auth.OAuth2>,
+  code: string,
+  logTag: string,
+): Promise<{ tokens: TokenPayload; attempts: number }> {
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= TOKEN_EXCHANGE_MAX_ATTEMPTS; attempt++) {
+    try {
+      const getTokenPromise = client.getToken(code);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('OAUTH_CALLBACK_TIMEOUT')), TOKEN_EXCHANGE_TIMEOUT_MS),
+      );
+      const result = await Promise.race([getTokenPromise, timeoutPromise]);
+      return { tokens: result.tokens, attempts: attempt };
+    } catch (err) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      const transport = msg.includes('OAUTH_CALLBACK_TIMEOUT') || isTransportError(err);
+      console.warn(`[oauth/callback] ${logTag} attempt=${attempt}/${TOKEN_EXCHANGE_MAX_ATTEMPTS} transport=${transport} err=${msg.slice(0, 160)}`);
+      if (!transport) throw err;
+      if (attempt < TOKEN_EXCHANGE_MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, TOKEN_EXCHANGE_BACKOFF_MS));
+      }
+    }
+  }
+  throw lastErr;
+}
 
 export async function GET(req: NextRequest) {
   const jar = await cookies();
@@ -119,14 +177,10 @@ export async function GET(req: NextRequest) {
   console.warn(`[oauth/callback] folder=${folderId} proxy=${proxyTag} begin getToken`);
 
   try {
-    // Promise.race sebagai safety net kedua di atas gaxios timeout: sebagian
-    // path network (DNS resolve, TLS handshake di proxy agent) bisa lolos
-    // dari socket timeout. 25s hard wall → selalu kembali ke redirect.
-    const getTokenPromise = client.getToken(code);
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('OAUTH_CALLBACK_TIMEOUT')), TOKEN_EXCHANGE_TIMEOUT_MS),
+    const { tokens, attempts } = await getTokenWithRetry(
+      client, code, `folder=${folderId} proxy=${proxyTag}`,
     );
-    const { tokens } = await Promise.race([getTokenPromise, timeoutPromise]);
+    if (attempts > 1) console.warn(`[oauth/callback] success after ${attempts} attempts folder=${folderId}`);
     // Scope start/route meminta 'openid email' sehingga Google selalu
     // mengembalikan id_token dengan claim email. Parse langsung — zero
     // API call ekstra setelah consent, selain token exchange yang wajib.
