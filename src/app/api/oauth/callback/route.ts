@@ -4,6 +4,7 @@ import { SESSION_COOKIE, verifySessionToken } from '@/lib/session';
 import { db, getFolder, getFolderProxyEnc } from '@/lib/store';
 import { unseal, seal } from '@/lib/crypto';
 import { buildProxyAgent, maskProxyUrl } from '@/lib/proxy';
+import { applyAutoProxyForGmail, applyAutoProxyForFolderDefault, applyAutoProxyAllGaps } from '@/lib/autoProxy';
 import { absoluteUrl } from '@/lib/url';
 import { google } from 'googleapis';
 
@@ -54,19 +55,17 @@ function emailFromIdToken(idToken: string): string {
 }
 
 /**
- * Hard timeout untuk SATU attempt token exchange. Dengan retry 3 kali +
- * backoff 2s, total worst-case: 3 * 15s + 2 * 2s = 49s, masih di bawah
- * Cloudflare 504 (~100s).
+ * Hard timeout untuk SATU attempt token exchange. Worst-case: 3 * 40s +
+ * 2 * 2s = 124s — tapi retry HANYA untuk true connect failure (TCP handshake
+ * belum terjadi, code OAuth pasti belum sampai Google). Timeout di layer
+ * response TIDAK di-retry karena bukti lapangan: SOCKS5 Multilogin sering
+ * lambat balas tapi request sudah sampai, sehingga code sudah consumed di
+ * Google dan retry = invalid_grant.
  *
- * Proxy mobile Multilogin terbukti intermittent (log menunjukkan pola
- * timeout-timeout-OK-reject-OK pada folder yang sama dalam 10 menit).
- * Code OAuth Google adalah one-time use, tapi hanya di-consumed kalau
- * request SAMPAI ke Google; kegagalan di layer transport (TCP/SOCKS
- * handshake, 15s timeout tanpa response) berarti code masih valid dan
- * attempt kedua aman. Error setelah Google menerima (4xx body) tidak
- * di-retry — code sudah terpakai.
+ * Timeout 40s memberi SOCKS5 Multilogin ruang bernapas untuk round-trip
+ * lengkap ke Google US. Kalau masih habis, surface error jelas ke operator.
  */
-const TOKEN_EXCHANGE_TIMEOUT_MS = 15_000;
+const TOKEN_EXCHANGE_TIMEOUT_MS = 40_000;
 const TOKEN_EXCHANGE_MAX_ATTEMPTS = 3;
 const TOKEN_EXCHANGE_BACKOFF_MS = 2_000;
 
@@ -110,8 +109,14 @@ async function getTokenWithRetry(
     } catch (err) {
       lastErr = err;
       const msg = err instanceof Error ? err.message : String(err);
-      const transport = msg.includes('OAUTH_CALLBACK_TIMEOUT') || isTransportError(err);
-      console.warn(`[oauth/callback] ${logTag} attempt=${attempt}/${TOKEN_EXCHANGE_MAX_ATTEMPTS} transport=${transport} err=${msg.slice(0, 160)}`);
+      const isTimeout = msg.includes('OAUTH_CALLBACK_TIMEOUT');
+      const transport = isTransportError(err);
+      console.warn(`[oauth/callback] ${logTag} attempt=${attempt}/${TOKEN_EXCHANGE_MAX_ATTEMPTS} timeout=${isTimeout} transport=${transport} err=${msg.slice(0, 160)}`);
+      // Timeout: request kemungkinan besar SAMPAI Google, response lambat balas.
+      // Retry hanya akan dapat invalid_grant. Surface error khusus.
+      if (isTimeout) {
+        throw new Error('PROXY_SLOW_CODE_CONSUMED');
+      }
       if (!transport) throw err;
       if (attempt < TOKEN_EXCHANGE_MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, TOKEN_EXCHANGE_BACKOFF_MS));
@@ -205,13 +210,23 @@ export async function GET(req: NextRequest) {
         status = 'connected',
         connected_at = excluded.connected_at
     `).run(email, folderId, refresh, Date.now());
+    // Auto-apply proxy ke gmail baru + folder default kalau belum ada. Operator
+    // tidak perlu set manual. Idempotent: skip gmail/folder yang sudah punya proxy.
+    // Juga sweep sekalian backfill gmail lain yang belum punya (cheap, idempotent).
+    try {
+      applyAutoProxyForGmail(folderId, email);
+      applyAutoProxyForFolderDefault(folderId);
+      applyAutoProxyAllGaps();
+    } catch (err) {
+      console.warn(`[oauth/callback] auto-proxy skipped: ${(err as Error).message}`);
+    }
     console.warn(`[oauth/callback] ok folder=${folderId} email=${email} proxy=${proxyTag}`);
     return NextResponse.redirect(absoluteUrl(req, `/folders/${folderId}?oauth=ok&email=${encodeURIComponent(email)}`));
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('OAUTH_CALLBACK_TIMEOUT')) {
+    if (msg.includes('OAUTH_CALLBACK_TIMEOUT') || msg.includes('PROXY_SLOW_CODE_CONSUMED')) {
       console.warn(`[oauth/callback] TIMEOUT folder=${folderId} proxy=${proxyTag}`);
-      return backTo('proxy-timeout');
+      return backTo('proxy-slow');
     }
     // Error gaxios biasanya memuat "ETIMEDOUT" / "ECONNREFUSED" / "407 Proxy
     // Authentication Required" / "tunneling socket could not be established".

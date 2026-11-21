@@ -236,11 +236,45 @@ export async function fetchLatestOtpFromGmail(
     const subject = headers['Subject'] || '';
     const from = headers['From'] || '';
     const snippet = msg.data.snippet || '';
-    const code = extractCode(subject + ' ' + snippet, digits);
+    let code = extractCode(subject + ' ' + snippet, digits);
+    // Snippet (±100 char) sering habis sebelum sampai ke digit kode kalau
+    // email IG punya preamble HTML panjang (logo alt-text, tracking pixel,
+    // greeting formal). Fallback fetch format=full dan parse body plaintext.
+    if (!code) {
+      try {
+        const full = await gmail.users.messages.get({ userId: 'me', id: item.id, format: 'full' }, callOpts);
+        const body = flattenBody(full.data.payload);
+        if (body) code = extractCode(subject + ' ' + body, digits);
+      } catch (err) {
+        if (isInvalidGrant(err)) markDead();
+        // body fetch gagal bukan fatal — lanjut ke message berikut
+      }
+    }
     if (code) {
       const receivedAt = msg.data.internalDate ? Number(msg.data.internalDate) : Date.now();
       return { code, from, subject, receivedAt };
     }
   }
   return null;
+}
+
+// Rakit plaintext dari semua MIME part. Prefer text/plain, fallback strip HTML.
+function flattenBody(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') return '';
+  const parts: string[] = [];
+  const walk = (node: Record<string, unknown>) => {
+    const mime = String(node.mimeType || '');
+    const body = (node.body as { data?: string } | undefined);
+    if (body?.data) {
+      try {
+        const decoded = Buffer.from(body.data, 'base64url').toString('utf8');
+        if (mime.startsWith('text/plain')) parts.push(decoded);
+        else if (mime.startsWith('text/html')) parts.push(decoded.replace(/<[^>]+>/g, ' '));
+      } catch { /* skip malformed part */ }
+    }
+    const sub = node.parts as Record<string, unknown>[] | undefined;
+    if (Array.isArray(sub)) for (const p of sub) walk(p);
+  };
+  walk(payload as Record<string, unknown>);
+  return parts.join(' ').replace(/\s+/g, ' ').slice(0, 20000);
 }

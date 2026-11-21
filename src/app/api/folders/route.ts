@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/session';
 import { db, listFolders } from '@/lib/store';
 import { seal } from '@/lib/crypto';
+import { ensureStartupSweep } from '@/lib/autoProxy';
 
 async function guard() {
   const jar = await cookies();
@@ -14,6 +15,10 @@ async function guard() {
 
 export async function GET() {
   if (!(await guard())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Startup backfill: operator buka dashboard sekali → semua gmail/folder
+  // lama yang belum punya proxy diisi dari template. Idempotent + jalan
+  // sekali per proses Node (sweepDone flag).
+  ensureStartupSweep();
   return NextResponse.json({ folders: listFolders() });
 }
 

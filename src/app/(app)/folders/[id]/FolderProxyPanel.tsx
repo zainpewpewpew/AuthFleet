@@ -29,8 +29,35 @@ export function FolderProxyPanel({
   const [folderUrl, setFolderUrl] = React.useState('');
   const [folderMasked, setFolderMasked] = React.useState<string | null>(initialFolderMasked);
   const [folderHas, setFolderHas] = React.useState(folderHasProxy);
-  const [folderBusy, setFolderBusy] = React.useState<'idle' | 'test' | 'save' | 'clear'>('idle');
+  const [folderBusy, setFolderBusy] = React.useState<'idle' | 'test' | 'save' | 'clear' | 'auto'>('idle');
   const [folderHint, setFolderHint] = React.useState<Hint | null>(null);
+  const [autoResult, setAutoResult] = React.useState<{ count: number; folderDefault: string | null } | null>(null);
+
+  async function autoApply() {
+    if (!confirm('Auto-apply proxy ke semua gmail di folder ini?\n\n• Pakai template MULTILOGIN_PROXY_TEMPLATE di server.\n• Rotate sid unique per gmail (1 IP = 1 gmail).\n• Override proxy per-gmail yang sudah ada.\n\nLanjutkan?')) return;
+    setFolderBusy('auto');
+    setAutoResult(null);
+    try {
+      const res = await fetch(`/api/folders/${folderId}/proxy/auto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applyFolderDefault: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert((data.error || 'Gagal auto apply') + (data.hint ? '\n\n' + data.hint : ''));
+        return;
+      }
+      setAutoResult({ count: data.count, folderDefault: data.folderDefault });
+      setFolderMasked(data.folderDefault);
+      setFolderHas(Boolean(data.folderDefault));
+      router.refresh();
+    } catch (err) {
+      alert('Network error: ' + (err as Error).message);
+    } finally {
+      setFolderBusy('idle');
+    }
+  }
 
   async function testFolder() {
     if (!folderUrl.trim()) return;
@@ -108,6 +135,25 @@ export function FolderProxyPanel({
             Default saat ini: {folderMasked}
           </div>
         ) : null}
+        <div style={{ padding: 12, borderRadius: 8, border: '1px solid rgba(0,200,120,.2)', background: 'rgba(0,200,120,.05)' }}>
+          <div className="af-body" style={{ fontSize: 13, marginBottom: 8 }}>
+            <strong>Auto apply</strong> — pakai template proxy di server + sid unique per gmail (1 IP = 1 gmail).
+          </div>
+          <Button variant="primary" size="sm" iconLeading={<Network size={12} />} onClick={autoApply} loading={folderBusy === 'auto'} type="button">
+            Auto apply proxy ke semua gmail
+          </Button>
+          {autoResult ? (
+            <div className="af-body af-muted" style={{ fontSize: 12, marginTop: 8 }}>
+              Berhasil apply ke {autoResult.count} gmail
+              {autoResult.folderDefault ? ' + folder default.' : '.'}
+            </div>
+          ) : null}
+        </div>
+        <details>
+          <summary className="af-body" style={{ cursor: 'pointer', fontSize: 13 }}>
+            Advanced: set URL proxy manual (override template)
+          </summary>
+          <div style={{ marginTop: 12, display: 'grid', gap: 12 }}>
         <label style={{ display: 'grid', gap: 8 }}>
           <span className="af-body" style={{ fontSize: 13 }}>URL proxy baru (http/https/socks5)</span>
           <input
@@ -138,6 +184,8 @@ export function FolderProxyPanel({
           ) : null}
         </div>
         {folderHint ? <HintView hint={folderHint} /> : null}
+          </div>
+        </details>
       </div>
 
       {gmails.length > 0 ? (
@@ -188,6 +236,13 @@ function GmailProxyRow({ folderId, entry }: { folderId: string; entry: GmailEntr
   const [busy, setBusy] = React.useState<'idle' | 'test' | 'save' | 'clear'>('idle');
   const [hint, setHint] = React.useState<Hint | null>(null);
   const [expanded, setExpanded] = React.useState(false);
+  // Sync local display state saat parent refresh props (misal setelah Auto
+  // apply global). Tanpa ini useState init hanya jalan sekali, chip tetap
+  // "PAKAI DEFAULT FOLDER" walau server sudah set per-gmail proxy.
+  React.useEffect(() => {
+    setMasked(entry.maskedOwn);
+    setHas(entry.hasOwnProxy);
+  }, [entry.maskedOwn, entry.hasOwnProxy]);
 
   async function test() {
     if (!url.trim()) return;
